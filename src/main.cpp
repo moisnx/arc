@@ -33,6 +33,18 @@
 #define KEY_ESC 27
 #define KEY_BACKSPACE_ALT 127
 
+#ifdef _WIN32
+// Windows/PDCurses specific
+#ifndef KEY_ENTER
+#define KEY_ENTER 10
+#endif
+#define GETMOUSE_FUNC nc_getmouse
+#else
+// Linux/NCurses specific
+// KEY_ENTER is already defined in ncurses.h, use it as-is
+#define GETMOUSE_FUNC getmouse
+#endif
+
 // Helper function to check if input is available without blocking
 bool hasInput()
 {
@@ -347,7 +359,7 @@ int main(int argc, char *argv[])
     if (ch == KEY_MOUSE)
     {
       MEVENT event;
-      if (nc_getmouse(&event) == OK)
+      if (GETMOUSE_FUNC(&event) == OK)
       {
         editor.handleMouse(event);
         shouldRedraw = true;
