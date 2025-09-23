@@ -14,7 +14,7 @@
 #endif
 
 // Local Project Headers
-#include "gap_buffer.h"
+#include "buffer.h"
 #include "src/features/syntax_highlighter.h"
 
 // Editor modes

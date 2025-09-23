@@ -1,4 +1,4 @@
-#include "gap_buffer.h"
+#include "buffer.h"
 #include <algorithm>
 #include <cstring>
 #include <fstream>

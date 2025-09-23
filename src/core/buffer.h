@@ -1,5 +1,5 @@
-#ifndef GAP_BUFFER_H
-#define GAP_BUFFER_H
+#ifndef BUFFER_H
+#define BUFFER_H
 
 #include <string>
 #include <utility>

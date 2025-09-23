@@ -1,7 +1,7 @@
 // src/features/syntax_highlighter.h
 #pragma once
 
-#include "src/core/gap_buffer.h"
+#include "src/core/buffer.h"
 #include <regex>
 #include <string>
 #include <vector>
