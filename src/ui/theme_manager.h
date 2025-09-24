@@ -156,6 +156,10 @@ public:
   int theme_color_to_ncurses_color(ThemeColor color) const;
   int theme_color_to_ncurses_attr(ThemeColor color) const;
 
+  // Terminal capability detection
+  bool supports_256_colors() const;
+  bool supports_true_color() const;
+
   // Legacy compatibility functions (for old colors.h API)
   Theme get_legacy_theme() const;
   void apply_legacy_theme(const Theme &theme);

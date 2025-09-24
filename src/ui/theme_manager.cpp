@@ -1,6 +1,7 @@
 #include "theme_manager.h"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -359,6 +360,16 @@ Theme ThemeManager::get_legacy_theme() const
       theme_color_to_ncurses_color(current_theme.markdown_link);
   legacy.markdown_link_bg = COLOR_BLACK;
   return legacy;
+}
+
+// Terminal capability detection
+bool ThemeManager::supports_256_colors() const { return COLORS >= 256; }
+
+bool ThemeManager::supports_true_color() const
+{
+  const char *colorterm = getenv("COLORTERM");
+  return (colorterm && (std::strcmp(colorterm, "truecolor") == 0 ||
+                        std::strcmp(colorterm, "24bit") == 0));
 }
 
 void ThemeManager::apply_legacy_theme(const Theme &theme)
