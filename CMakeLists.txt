@@ -60,7 +60,7 @@ set(SOURCES
     src/main.cpp
     src/core/editor.cpp
     src/core/buffer.cpp
-    src/ui/colors.cpp
+    # src/ui/colors.cpp
     src/ui/theme_manager.cpp
     src/features/syntax_highlighter.cpp
 )

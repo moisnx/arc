@@ -1,40 +1,34 @@
-# GitHub-inspired light theme for terminal editor
-name: "GitHub Light"
+name: "GitHub Dark"
 
-# UI Colors
-background: "#ffffff"
-foreground: "#24292e"
-cursor: "#000000"
-selection: "#c8e1ff"
-line_highlight: "#f6f8fa"
-line_numbers: "#d1d5da"
-line_numbers_active: "#6a737d"
+background: black
+foreground: light_gray
+cursor: white
+selection: blue
+line_highlight: dark_gray
+line_numbers: gray
+line_numbers_active: light_gray
 
-# Status Bar
-status_bar_bg: "#f6f8fa"
-status_bar_fg: "#24292e"
-status_bar_active: "#0366d6"
+status_bar_bg: dark_gray
+status_bar_fg: light_gray
+status_bar_active: bright_cyan
 
-# Syntax Highlighting
-keyword: "#d73a49"
-string_literal: "#032f62"
-number: "#005cc5"
-comment: "#6a737d"
-function_name: "#6f42c1"
-variable: "#24292e"
-type: "#005cc5"
-operator_color: "#d73a49"
-preprocessor: "#d73a49"
+keyword: bright_red
+string_literal: green
+number: bright_magenta
+comment: gray
+function_name: bright_magenta
+variable: light_gray
+type: bright_cyan
+operator: bright_red
+preprocessor: bright_red
 
-# Language Specific
-python_decorator: "#6f42c1"
-python_builtin: "#d73a49"
-cpp_namespace: "#005cc5"
+python_decorator: bright_magenta
+python_builtin: bright_red
+cpp_namespace: bright_cyan
 
-# Markdown
-markdown_heading: "#d73a49"
-markdown_bold: "#24292e"
-markdown_italic: "#032f62"
-markdown_code: "#6f42c1"
-markdown_link: "#0366d6"
-markdown_quote: "#6a737d"
+markdown_heading: bright_red
+markdown_bold: light_gray
+markdown_italic: green
+markdown_code: bright_magenta
+markdown_link: bright_cyan
+markdown_quote: gray

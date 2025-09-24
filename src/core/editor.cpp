@@ -1,4 +1,5 @@
 #include "editor.h"
+// #include "src/ui/colors.h"
 #include "src/ui/theme_manager.h"
 #include <algorithm>
 #include <cstdlib>
@@ -360,12 +361,12 @@ void Editor::drawStatusBar()
     else if (hasSelection)
     {
       modeStr = " VISUAL ";
-      modeColor = STATUS_BAR_GREEN;
+      modeColor = STATUS_BAR_ACTIVE;
     }
     else
     {
       modeStr = " VISUAL ";
-      modeColor = STATUS_BAR_GREEN;
+      modeColor = STATUS_BAR_ACTIVE;
     }
     break;
   }
@@ -390,22 +391,22 @@ void Editor::drawStatusBar()
                                   : filename;
     printw("%s", displayName.c_str());
   }
-  attroff(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
+  attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
 
   // Show modified indicator
   if (isModified)
   {
-    attron(COLOR_PAIR(STATUS_BAR_DIM) | A_BOLD);
+    attron(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
     printw(" [+]");
-    attroff(COLOR_PAIR(STATUS_BAR_DIM) | A_BOLD);
+    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
   }
 
   std::string ext = getFileExtension();
   if (!ext.empty())
   {
-    attron(COLOR_PAIR(STATUS_BAR_DIM));
+    attron(COLOR_PAIR(STATUS_BAR_ACTIVE));
     printw(" [%s]", ext.c_str());
-    attroff(COLOR_PAIR(STATUS_BAR_DIM));
+    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE));
   }
 
   char rightSection[256];
@@ -459,13 +460,13 @@ void Editor::drawStatusBar()
     rightStart = currentPos + 2;
   }
 
-  attron(COLOR_PAIR(11));
+  attron(COLOR_PAIR(STATUS_BAR_CYAN));
   for (int i = currentPos; i < rightStart && i < cols; i++)
   {
     move(statusRow, i);
     addch(' ');
   }
-  attroff(COLOR_PAIR(11));
+  attroff(COLOR_PAIR(STATUS_BAR_CYAN));
 
   if (rightStart < cols)
   {

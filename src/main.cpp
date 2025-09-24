@@ -2,7 +2,6 @@
 #include "src/features/syntax_highlighter.h"
 #include "src/ui/theme_manager.h"
 // #include "ui/colors.h"
-// #include "ui/colors.h"
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -332,10 +331,6 @@ int main(int argc, char *argv[])
   }
 
   initscr();
-#ifdef _WIN32
-  // Force PDCurses color initialization
-  resize_term(0, 0); // This sometimes helps PDCurses recognize colors
-#endif
   cbreak();
   keypad(stdscr, TRUE);
   noecho();
@@ -355,8 +350,9 @@ int main(int argc, char *argv[])
 
   editor.display();
 
-  std::cerr << "Color pair 9 (KEYWORD) after display = " << COLOR_PAIR(KEYWORD)
-            << std::endl;
+  // std::cerr << "Color pair 9 (KEYWORD) after display = " <<
+  // COLOR_PAIR(KEYWORD)
+  //           << std::endl;
   refresh();
   refresh();
 
