@@ -1,0 +1,40 @@
+# Cyberpunk Neon theme for terminal editor
+name: "Cyberpunk Neon"
+
+# UI Colors
+background: "#000000"
+foreground: "#e0e0e0"
+cursor: "#00ffff"
+selection: "#1a1a1a"
+line_highlight: "#111111"
+line_numbers: "#555555"
+line_numbers_active: "#ff00ff"
+
+# Status Bar
+status_bar_bg: "#111111"
+status_bar_fg: "#e0e0e0"
+status_bar_active: "#00ffff"
+
+# Syntax Highlighting
+keyword: "#ff00ff"        # Neon Pink
+string_literal: "#39ff14" # Neon Green
+number: "#00ffff"         # Cyan
+comment: "#808080"        # Gray for balance
+function_name: "#ff6ec7"  # Hot Pink
+variable: "#e0e0e0"       # Neutral
+type: "#ffcc00"           # Neon Yellow
+operator_color: "#ff00ff" # Pink operators
+preprocessor: "#ff00ff"   # Pink preprocessor
+
+# Language Specific
+python_decorator: "#ff6ec7"
+python_builtin: "#ff00ff"
+cpp_namespace: "#00ffff"
+
+# Markdown
+markdown_heading: "#ff00ff"
+markdown_bold: "#ffcc00"
+markdown_italic: "#39ff14"
+markdown_code: "#00ffff"
+markdown_link: "#ff6ec7"
+markdown_quote: "#808080"

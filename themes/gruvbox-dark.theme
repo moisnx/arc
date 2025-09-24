@@ -1,0 +1,40 @@
+# Gruvbox Dark theme for terminal editor
+name: "Gruvbox Dark"
+
+# UI Colors
+background: "#282828"
+foreground: "#ebdbb2"
+cursor: "#fe8019"
+selection: "#3c3836"
+line_highlight: "#32302f"
+line_numbers: "#928374"
+line_numbers_active: "#fabd2f"
+
+# Status Bar
+status_bar_bg: "#3c3836"
+status_bar_fg: "#ebdbb2"
+status_bar_active: "#fe8019"
+
+# Syntax Highlighting
+keyword: "#fb4934"        # Red
+string_literal: "#b8bb26" # Green
+number: "#d3869b"         # Purple
+comment: "#928374"        # Gray
+function_name: "#fabd2f"  # Yellow
+variable: "#ebdbb2"       # Neutral
+type: "#83a598"           # Aqua
+operator_color: "#fb4934" # Red
+preprocessor: "#fe8019"   # Orange
+
+# Language Specific
+python_decorator: "#fabd2f"
+python_builtin: "#fb4934"
+cpp_namespace: "#83a598"
+
+# Markdown
+markdown_heading: "#fb4934"
+markdown_bold: "#fabd2f"
+markdown_italic: "#b8bb26"
+markdown_code: "#d3869b"
+markdown_link: "#83a598"
+markdown_quote: "#928374"

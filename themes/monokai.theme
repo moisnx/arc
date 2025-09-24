@@ -1,0 +1,40 @@
+# Monokai-inspired theme for terminal editor
+name: "Monokai Dark"
+
+# UI Colors
+background: "#272822"
+foreground: "#f8f8f2"
+cursor: "#f8f8f0"
+selection: "#49483e"
+line_highlight: "#3e3d32"
+line_numbers: "#90908a"
+line_numbers_active: "#c4c4bc"
+
+# Status Bar
+status_bar_bg: "#75715e"
+status_bar_fg: "#f8f8f2"
+status_bar_active: "#66d9ef"
+
+# Syntax Highlighting
+keyword: "#f92672"
+string_literal: "#e6db74"
+number: "#ae81ff"
+comment: "#75715e"
+function_name: "#a6e22e"
+variable: "#f8f8f2"
+type: "#66d9ef"
+operator_color: "#f92672"
+preprocessor: "#f92672"
+
+# Language Specific
+python_decorator: "#a6e22e"
+python_builtin: "#f92672"
+cpp_namespace: "#66d9ef"
+
+# Markdown
+markdown_heading: "#f92672"
+markdown_bold: "#f8f8f2"
+markdown_italic: "#e6db74"
+markdown_code: "#a6e22e"
+markdown_link: "#66d9ef"
+markdown_quote: "#75715e"

@@ -1,0 +1,40 @@
+# GitHub-inspired light theme for terminal editor
+name: "GitHub Light"
+
+# UI Colors
+background: "#ffffff"
+foreground: "#24292e"
+cursor: "#000000"
+selection: "#c8e1ff"
+line_highlight: "#f6f8fa"
+line_numbers: "#d1d5da"
+line_numbers_active: "#6a737d"
+
+# Status Bar
+status_bar_bg: "#f6f8fa"
+status_bar_fg: "#24292e"
+status_bar_active: "#0366d6"
+
+# Syntax Highlighting
+keyword: "#d73a49"
+string_literal: "#032f62"
+number: "#005cc5"
+comment: "#6a737d"
+function_name: "#6f42c1"
+variable: "#24292e"
+type: "#005cc5"
+operator_color: "#d73a49"
+preprocessor: "#d73a49"
+
+# Language Specific
+python_decorator: "#6f42c1"
+python_builtin: "#d73a49"
+cpp_namespace: "#005cc5"
+
+# Markdown
+markdown_heading: "#d73a49"
+markdown_bold: "#24292e"
+markdown_italic: "#032f62"
+markdown_code: "#6f42c1"
+markdown_link: "#0366d6"
+markdown_quote: "#6a737d"

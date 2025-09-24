@@ -1,7 +1,8 @@
 #include "src/core/editor.h"
 #include "src/features/syntax_highlighter.h"
-#include "src/ui/colors.h"
-#include "ui/colors.h"
+#include "src/ui/theme_manager.h"
+// #include "ui/colors.h"
+// #include "ui/colors.h"
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -331,19 +332,32 @@ int main(int argc, char *argv[])
   }
 
   initscr();
+#ifdef _WIN32
+  // Force PDCurses color initialization
+  resize_term(0, 0); // This sometimes helps PDCurses recognize colors
+#endif
   cbreak();
   keypad(stdscr, TRUE);
   noecho();
-  start_color();
+  // use_color
+  g_theme_manager.initialize();
+  // std::cerr << "Colors: " << COLORS << ", Color Pairs: " << COLOR_PAIRS
+  //           << std::endl;
+  if (!g_theme_manager.load_theme_from_file("themes/default.theme"))
+  {
+    std::cerr << "Failed to load theme, using default" << std::endl;
+  }
 
   nodelay(stdscr, FALSE);
   mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
   printf("\033[?1003h");
   fflush(stdout);
 
-  init_colors();
-
   editor.display();
+
+  std::cerr << "Color pair 9 (KEYWORD) after display = " << COLOR_PAIR(KEYWORD)
+            << std::endl;
+  refresh();
   refresh();
 
   int ch;

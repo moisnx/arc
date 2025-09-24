@@ -1,5 +1,5 @@
 #include "editor.h"
-#include "src/ui/colors.h"
+#include "src/ui/theme_manager.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -228,14 +228,28 @@ void Editor::display()
     endLine = buffer.getLineCount();
   }
 
+  // Pre-calculate syntax highlighting for visible lines ONCE
+  std::vector<std::vector<ColorSpan>> lineSpans(endLine - viewportTop);
+  if (syntaxHighlighter)
+  {
+    for (int i = viewportTop; i < endLine; i++)
+    {
+      std::string expandedLine = expandTabs(buffer.getLine(i), tabSize);
+      lineSpans[i - viewportTop] =
+          syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
+    }
+  }
+
+  // Render all lines
   for (int i = viewportTop; i < endLine; i++)
   {
     int screenRow = i - viewportTop;
     bool isCurrentLine = (cursorLine == i);
 
     move(screenRow, 0);
-    int ln_colorPair = isCurrentLine ? 1 : 2;
 
+    // Line numbers with consistent color pairs
+    int ln_colorPair = isCurrentLine ? LINE_NUMBERS_ACTIVE : LINE_NUMBERS;
     attron(COLOR_PAIR(ln_colorPair));
     printw("%*d ", lineNumWidth, i + 1);
     attroff(COLOR_PAIR(ln_colorPair));
@@ -243,14 +257,9 @@ void Editor::display()
     move(screenRow, contentStartCol);
 
     std::string expandedLine = expandTabs(buffer.getLine(i), tabSize);
+    const std::vector<ColorSpan> &currentLineSpans = lineSpans[i - viewportTop];
 
-    std::vector<ColorSpan> currentLineSpans;
-    if (syntaxHighlighter)
-    {
-      currentLineSpans =
-          syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
-    }
-
+    // Render line content
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
     {
       int fileCol = viewportLeft + screenCol;
@@ -259,6 +268,7 @@ void Editor::display()
           (fileCol >= 0 && fileCol < static_cast<int>(expandedLine.length()));
       char ch = charExists ? expandedLine[fileCol] : ' ';
 
+      // Find applicable syntax highlighting
       int currentSyntaxColor = -1;
       int currentSyntaxAttr = 0;
       bool hasSyntaxHighlight = false;
@@ -272,13 +282,14 @@ void Editor::display()
             currentSyntaxColor = span.colorPair;
             currentSyntaxAttr = span.attribute;
             hasSyntaxHighlight = true;
-            break;
+            break; // Use first matching span
           }
         }
       }
 
       bool isSelected = isPositionSelected(i, fileCol);
 
+      // Apply attributes efficiently - avoid redundant calls
       if (hasSyntaxHighlight)
       {
         attron(COLOR_PAIR(currentSyntaxColor) | currentSyntaxAttr);
@@ -291,6 +302,7 @@ void Editor::display()
 
       addch(ch);
 
+      // Remove attributes in reverse order
       if (isSelected)
       {
         attroff(A_STANDOUT);
@@ -303,6 +315,7 @@ void Editor::display()
     }
   }
 
+  // Draw status bar
   drawStatusBar();
   positionCursor();
   updateCursorStyle();
@@ -315,12 +328,12 @@ void Editor::drawStatusBar()
   int statusRow = rows - 1;
 
   move(statusRow, 0);
-  attron(COLOR_PAIR(11));
+  attron(COLOR_PAIR(STATUS_BAR));
   for (int i = 0; i < cols; i++)
   {
     addch(' ');
   }
-  attroff(COLOR_PAIR(11));
+  attroff(COLOR_PAIR(STATUS_BAR));
 
   move(statusRow, 0);
 
@@ -332,27 +345,27 @@ void Editor::drawStatusBar()
   {
   case EditorMode::NORMAL:
     modeStr = " NORMAL ";
-    modeColor = 10;
+    modeColor = STATUS_BAR;
     break;
   case EditorMode::INSERT:
     modeStr = " INSERT ";
-    modeColor = 15;
+    modeColor = STATUS_BAR_ACTIVE;
     break;
   case EditorMode::VISUAL:
     if (isSelecting)
     {
       modeStr = " VISUAL ";
-      modeColor = 15;
+      modeColor = STATUS_BAR_ACTIVE;
     }
     else if (hasSelection)
     {
       modeStr = " VISUAL ";
-      modeColor = 14;
+      modeColor = STATUS_BAR_GREEN;
     }
     else
     {
       modeStr = " VISUAL ";
-      modeColor = 14;
+      modeColor = STATUS_BAR_GREEN;
     }
     break;
   }
@@ -361,10 +374,10 @@ void Editor::drawStatusBar()
   printw("%s", modeStr.c_str());
   attroff(COLOR_PAIR(modeColor) | A_BOLD);
 
-  attron(COLOR_PAIR(11));
+  attron(COLOR_PAIR(modeColor));
   printw(" ");
 
-  attron(COLOR_PAIR(12) | A_BOLD);
+  attron(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
   if (filename.empty())
   {
     printw("[No Name]");
@@ -377,22 +390,22 @@ void Editor::drawStatusBar()
                                   : filename;
     printw("%s", displayName.c_str());
   }
-  attroff(COLOR_PAIR(12) | A_BOLD);
+  attroff(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
 
   // Show modified indicator
   if (isModified)
   {
-    attron(COLOR_PAIR(16) | A_BOLD);
+    attron(COLOR_PAIR(STATUS_BAR_DIM) | A_BOLD);
     printw(" [+]");
-    attroff(COLOR_PAIR(16) | A_BOLD);
+    attroff(COLOR_PAIR(STATUS_BAR_DIM) | A_BOLD);
   }
 
   std::string ext = getFileExtension();
   if (!ext.empty())
   {
-    attron(COLOR_PAIR(16));
+    attron(COLOR_PAIR(STATUS_BAR_DIM));
     printw(" [%s]", ext.c_str());
-    attroff(COLOR_PAIR(16));
+    attroff(COLOR_PAIR(STATUS_BAR_DIM));
   }
 
   char rightSection[256];
@@ -460,11 +473,11 @@ void Editor::drawStatusBar()
 
     if (hasSelection || currentMode == EditorMode::VISUAL)
     {
-      attron(COLOR_PAIR(14) | A_BOLD);
+      attron(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
     }
     else
     {
-      attron(COLOR_PAIR(13) | A_BOLD);
+      attron(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
     }
 
     int remaining = cols - rightStart;
@@ -478,8 +491,8 @@ void Editor::drawStatusBar()
       printw("%s", truncated.c_str());
     }
 
-    attroff(COLOR_PAIR(14) | A_BOLD);
-    attroff(COLOR_PAIR(13) | A_BOLD);
+    attroff(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
+    attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
   }
 }
 

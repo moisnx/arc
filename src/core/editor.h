@@ -2,10 +2,8 @@
 #define EDITOR_H
 
 // Core C++ Libraries
-#include <iostream>
 #include <stack>
 #include <string>
-#include <vector>
 
 #ifdef _WIN32
 #include <curses.h> // pdcurses on Windows
@@ -60,6 +58,7 @@ public:
   void moveCursorToLineEnd();
   void scrollUp(int lines = 3);
   void scrollDown(int lines = 3);
+  void moveCursorTo(int newLine, int newCol);
   void validateCursorAndViewport();
 
   // Mode management
@@ -81,6 +80,7 @@ public:
 
   // Utility
   bool hasUnsavedChanges() const { return isModified; }
+  void ensureCursorVisible();
 
 private:
   // Core Data

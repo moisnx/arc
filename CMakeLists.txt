@@ -52,12 +52,16 @@ else()
     set(CURSES_INCLUDE_DIRS ${CURSES_INCLUDE_DIR})
 endif()
 
+find_package(yaml-cpp CONFIG REQUIRED)
+
+
 # Source files
 set(SOURCES
     src/main.cpp
     src/core/editor.cpp
     src/core/buffer.cpp
     src/ui/colors.cpp
+    src/ui/theme_manager.cpp
     src/features/syntax_highlighter.cpp
 )
 
@@ -65,7 +69,8 @@ set(SOURCES
 add_executable(arc ${SOURCES})
 
 # Link libraries
-target_link_libraries(arc PRIVATE ${CURSES_LIBRARIES})
+# target_link_libraries(arc PRIVATE yaml-cpp)
+target_link_libraries(arc PRIVATE ${CURSES_LIBRARIES} )
 
 # Include directories
 target_include_directories(arc PRIVATE . ${CURSES_INCLUDE_DIRS})

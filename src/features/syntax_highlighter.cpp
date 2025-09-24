@@ -1,7 +1,12 @@
 // src/features/syntax_highlighter.cpp
 #include "syntax_highlighter.h"
-#include "src/ui/colors.h"
+#include "src/ui/theme_manager.h"
 #include <algorithm>
+#ifdef _WIN32
+#include <curses.h> // pdcurses on Windows
+#else
+#include <ncurses.h> // ncurses on Unix-like systems
+#endif
 #include <iostream>
 #include <unordered_set>
 

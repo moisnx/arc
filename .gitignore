@@ -74,3 +74,6 @@ tests/build/
 # Documentation build
 docs/build/
 doc/build/
+
+# Dev files
+todo.md

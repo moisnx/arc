@@ -1,0 +1,40 @@
+# One Dark theme for terminal editor (Atom-inspired)
+name: "One Dark"
+
+# UI Colors
+background: "#282c34"
+foreground: "#abb2bf"
+cursor: "#ffffff"
+selection: "#3e4451"
+line_highlight: "#2c313c"
+line_numbers: "#5c6370"
+line_numbers_active: "#abb2bf"
+
+# Status Bar
+status_bar_bg: "#2c313c"
+status_bar_fg: "#abb2bf"
+status_bar_active: "#61afef"
+
+# Syntax Highlighting
+keyword: "#c678dd"
+string_literal: "#98c379"
+number: "#d19a66"
+comment: "#5c6370"
+function_name: "#61afef"
+variable: "#e06c75"
+type: "#56b6c2"
+operator_color: "#c678dd"
+preprocessor: "#e06c75"
+
+# Language Specific
+python_decorator: "#61afef"
+python_builtin: "#c678dd"
+cpp_namespace: "#56b6c2"
+
+# Markdown
+markdown_heading: "#c678dd"
+markdown_bold: "#e06c75"
+markdown_italic: "#98c379"
+markdown_code: "#61afef"
+markdown_link: "#56b6c2"
+markdown_quote: "#5c6370"
