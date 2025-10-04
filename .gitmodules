@@ -1,3 +1,30 @@
 [submodule "third_party/third_party/ftxui"]
 	path = third_party/third_party/ftxui
 	url = https://github.com/ArthurSonzogni/FTXUI.git
+[submodule "deps/tree-sitter-core"]
+	path = deps/tree-sitter-core
+	url = https://github.com/tree-sitter/tree-sitter.git
+[submodule "deps/tree-sitter-python"]
+	path = deps/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python.git
+[submodule "deps/tree-sitter-c"]
+	path = deps/tree-sitter-c
+	url = https://github.com/tree-sitter/tree-sitter-c.git
+[submodule "deps/tree-sitter-markdown"]
+	path = deps/tree-sitter-markdown
+	url = https://github.com/tree-sitter-grammars/tree-sitter-markdown.git
+[submodule "deps/tree-sitter-cpp"]
+	path = deps/tree-sitter-cpp
+	url = https://github.com/tree-sitter/tree-sitter-cpp
+[submodule "deps/tree-sitter-rust"]
+	path = deps/tree-sitter-rust
+	url = https://github.com/tree-sitter/tree-sitter-rust
+[submodule "deps/efsw"]
+	path = deps/efsw
+	url = https://github.com/SpartanJ/efsw
+[submodule "deps/tree-sitter-javascript"]
+	path = deps/tree-sitter-javascript
+	url = https://github.com/tree-sitter/tree-sitter-javascript
+[submodule "deps/tree-sitter-typescript"]
+	path = deps/tree-sitter-typescript
+	url = https://github.com/tree-sitter/tree-sitter-typescript
