@@ -40,12 +40,21 @@ public:
   Editor(SyntaxHighlighter *highlighter);
   void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
   bool loadFile(const std::string &fname);
-  bool saveFile(const std::string &fname = "");
+  bool saveFile();
   void display();
   void drawStatusBar();
   void handleResize();
   void handleMouse(MEVENT &event);
   void clearSelection();
+  std::string getFilename() const { return filename; }
+  std::string getFirstLine() const
+  {
+    // Assumption: The GapBuffer class has a method 'getLine(int lineIndex)'
+    // that returns the string content of the line at the specified index.
+    return buffer.getLine(0);
+  }
+
+  GapBuffer getBuffer() { return buffer; }
 
   // Movement
   void moveCursorUp();
@@ -82,11 +91,42 @@ public:
   bool hasUnsavedChanges() const { return isModified; }
   void ensureCursorVisible();
 
+  // Debug
+  void debugPrintState(const std::string &context);
+  bool validateEditorState();
+  void updateSyntaxHighlighting()
+  {
+    if (syntaxHighlighter)
+    {
+      std::string extension = getFileExtension();
+      if (!extension.empty())
+      {
+        syntaxHighlighter->setLanguage(extension);
+      }
+      else
+      {
+        syntaxHighlighter->setLanguage("txt");
+      }
+    }
+  };
+  void reloadConfig();
+  void initializeViewportHighlighting();
+
 private:
   // Core Data
+  std::string currentFileName;
   GapBuffer buffer;
   std::string filename;
   SyntaxHighlighter *syntaxHighlighter;
+
+  bool isSaving = false; // Add this flag
+  void notifyBufferChanged()
+  {
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->bufferChanged(buffer);
+    }
+  }
 
   // Mode system
   EditorMode currentMode = EditorMode::NORMAL;

@@ -33,6 +33,8 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <stdlib.h>
+
 
 namespace llvm
 {

@@ -69,6 +69,8 @@ private:
   // Constants
   static const size_t DEFAULT_GAP_SIZE = 1024;
   static const size_t MIN_GAP_SIZE = 512;
+  mutable std::vector<size_t> line_start_cache_;
+  mutable bool line_cache_valid_ = false;
 };
 
 #endif // GAP_BUFFER_H

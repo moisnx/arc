@@ -15,6 +15,7 @@ codebase for testing an editor's ability to correctly parse, highlight,
 and interact with a Python script.
 """
 
+
 text = "Hello, Moi!"
 print(text)
 

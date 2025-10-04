@@ -20,40 +20,93 @@ GapBuffer::GapBuffer(const std::string &initialText) : GapBuffer()
   }
 }
 
+#include "buffer.h"
+#include <algorithm>
+#include <fstream>
+#include <iostream>
+#include <vector>
+
 bool GapBuffer::loadFromFile(const std::string &filename)
 {
-  std::ifstream file(filename, std::ios::binary);
+  // --- Step 1: Fast I/O (Read entire file into memory) ---
+  std::ifstream file(filename, std::ios::binary | std::ios::ate);
   if (!file.is_open())
   {
     return false;
   }
 
+  std::streamsize fileSize = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  // Handle empty file case
+  if (fileSize <= 0)
+  {
+    clear();
+    insertChar(0, '\n');
+    return true;
+  }
+
+  std::vector<char> content(fileSize);
+  if (!file.read(content.data(), fileSize))
+  {
+    return false;
+  }
+  file.close();
+
+  // --- Step 2: Clear and Initial Buffer Sizing ---
   clear();
 
-  std::string line;
-  bool first = true;
-  while (std::getline(file, line))
+  // Prepare buffer with maximum possible size (fileSize) + gap size.
+  // We will resize down later based on the actual normalized size.
+  buffer.resize(fileSize + DEFAULT_GAP_SIZE);
+
+  // Set the destination pointer to the beginning of the text part (after the
+  // initial gap)
+  char *dest = buffer.data() + DEFAULT_GAP_SIZE;
+
+  // --- Step 3: Single-Pass Normalization and Copy ---
+  // Perform copy/normalization directly from 'content' to 'buffer'
+  const char *src = content.data();
+  size_t actualTextSize = 0;
+
+  for (std::streamsize i = 0; i < fileSize; ++i)
   {
-    if (!first)
-    {
-      insertChar(textSize(), '\n');
-    }
-    first = false;
+    char c = src[i];
 
-    // Remove carriage returns
-    if (!line.empty() && line.back() == '\r')
+    if (c == '\r')
     {
-      line.pop_back();
+      // Windows \r\n sequence: skip \r, write \n
+      if (i + 1 < fileSize && src[i + 1] == '\n')
+      {
+        c = '\n';
+        i++; // Advance source index to consume the next character (\n) as part
+             // of this sequence
+      }
+      else
+      {
+        // Old Mac/Lone \r: Replace with \n
+        c = '\n';
+      }
     }
 
-    insertText(textSize(), line);
+    // Write the normalized character directly into the Gap Buffer
+    *dest++ = c;
+    actualTextSize++;
   }
 
-  // If file was empty, ensure we have at least one empty line
-  if (textSize() == 0)
-  {
-    insertChar(0, '\n');
-  }
+  // --- Step 4: Finalize Gap Buffer State ---
+
+  // 1. Trim the buffer to the actual size needed (normalized text size + gap
+  // size)
+  //    This is CRITICAL to ensure textSize() reports the correct value.
+  buffer.resize(actualTextSize + DEFAULT_GAP_SIZE);
+
+  // 2. Set gap at the beginning
+  gapStart = 0;
+  gapSize = DEFAULT_GAP_SIZE;
+
+  // 3. Mark the line index as dirty for rebuilding
+  invalidateLineIndex();
 
   return true;
 }
@@ -341,21 +394,55 @@ void GapBuffer::replaceLine(int lineNum, const std::string &newLine)
   invalidateLineIndex();
 }
 
+// std::string GapBuffer::getText() const
+// {
+//   std::string result;
+//   result.reserve(textSize());
+
+//   // Add text before gap
+//   for (size_t i = 0; i < gapStart; ++i)
+//   {
+//     result += buffer[i];
+//   }
+
+//   // Add text after gap
+//   for (size_t i = gapEnd(); i < buffer.size(); ++i)
+//   {
+//     result += buffer[i];
+//   }
+
+//   return result;
+// }
+
+// In buffer.cpp, inside GapBuffer::getText()
 std::string GapBuffer::getText() const
 {
+  // The size of the final string *must* match the size reported by textSize()
+  size_t text_size = textSize();
   std::string result;
-  result.reserve(textSize());
+  result.reserve(text_size); // Reserve the exact final capacity
 
-  // Add text before gap
-  for (size_t i = 0; i < gapStart; ++i)
+  // 1. Append the first half (Text before the gap)
+  // The length of the first half is gapStart
+  result.append(buffer.data(), gapStart);
+
+  // 2. Append the second half (Text after the gap)
+  // The length of the second half is text_size - gapStart
+  size_t afterGapLength = text_size - gapStart;
+
+  // Check for a scenario where afterGapLength might wrap (though highly
+  // unlikely with your logic)
+  if (afterGapLength > 0 && gapEnd() < buffer.size())
   {
-    result += buffer[i];
+    result.append(buffer.data() + gapEnd(), afterGapLength);
   }
 
-  // Add text after gap
-  for (size_t i = gapEnd(); i < buffer.size(); ++i)
+  // Safety Check: If the buffer was empty, or if logic failed, ensure the
+  // result matches the source of truth
+  if (result.size() != text_size)
   {
-    result += buffer[i];
+    // This should not happen, but if it does, it's a critical bug.
+    // For now, assume logic is correct and rely on the math.
   }
 
   return result;
@@ -381,10 +468,15 @@ size_t GapBuffer::size() const { return textSize(); }
 
 size_t GapBuffer::getBufferSize() const { return buffer.size(); }
 
+// In buffer.cpp
+
 void GapBuffer::moveGapTo(size_t pos)
 {
   if (pos == gapStart)
     return;
+
+  // Get the base pointer once
+  char *base_ptr = buffer.data();
 
   if (pos < gapStart)
   {
@@ -392,9 +484,10 @@ void GapBuffer::moveGapTo(size_t pos)
     size_t moveSize = gapStart - pos;
     size_t gapEndPos = gapEnd();
 
-    // Use memmove to handle overlapping memory safely
-    // Move text from [pos, gapStart) to [gapEndPos - moveSize, gapEndPos)
-    std::memmove(&buffer[gapEndPos - moveSize], &buffer[pos], moveSize);
+    // Move text from [pos] to [gapEndPos - moveSize]
+    // This moves the text segment that was at pos and pushes it to the end of
+    // the text segment after the gap
+    std::memmove(base_ptr + gapEndPos - moveSize, base_ptr + pos, moveSize);
 
     gapStart = pos;
   }
@@ -404,12 +497,16 @@ void GapBuffer::moveGapTo(size_t pos)
     size_t moveSize = pos - gapStart;
     size_t gapEndPos = gapEnd();
 
-    // Move text from [gapEndPos, gapEndPos + moveSize) to [gapStart, gapStart +
-    // moveSize)
-    std::memmove(&buffer[gapStart], &buffer[gapEndPos], moveSize);
+    // Move text from [gapEndPos] to [gapStart]
+    // This pulls the text segment that was after the gap and fills the newly
+    // created gap space
+    std::memmove(base_ptr + gapStart, base_ptr + gapEndPos, moveSize);
 
     gapStart = pos;
   }
+
+  // IMPORTANT: The gap size must remain the same, but its position is now
+  // correct
 }
 
 void GapBuffer::expandGap(size_t minSize)

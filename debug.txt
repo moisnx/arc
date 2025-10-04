@@ -1,0 +1,32 @@
+Using config directory: /home/moi/projects/arc/.config/arceditor
+[?1049h[22;0;0t[1;24r(B[m[4l[?7h[?1h=[?12l[?25h=== UNIFIED THEME SYSTEM WITH HEX SUPPORT ===
+COLORS: 256
+COLOR_PAIRS: 256
+256-color support: YES
+TERM: xterm-256color
+WSL detected: Ubuntu
+StyleManager not initialized, cannot apply theme
+Unified theme system initialized successfully
+Applying theme: One Dark
+Created custom color 16 for #282C34 (RGB: 40,44,52)
+Created custom color 17 for #ABB2BF (RGB: 171,178,191)
+Created custom color 18 for #495162 (RGB: 73,81,98)
+Created custom color 19 for #808080 (RGB: 128,128,128)
+Created custom color 20 for #21252B (RGB: 33,37,43)
+Created custom color 21 for #61AFEF (RGB: 97,175,239)
+Created custom color 22 for #00FFFF (RGB: 0,255,255)
+Created custom color 23 for #FFFF00 (RGB: 255,255,0)
+Created custom color 24 for #00FF00 (RGB: 0,255,0)
+Created custom color 25 for #FF00FF (RGB: 255,0,255)
+Created custom color 26 for #528BFF (RGB: 82,139,255)
+Created custom color 27 for #3E4451 (RGB: 62,68,81)
+Created custom color 28 for #2C313C (RGB: 44,49,60)
+Created custom color 29 for #C678DD (RGB: 198,120,221)
+Created custom color 30 for #98C379 (RGB: 152,195,121)
+Created custom color 31 for #D19A66 (RGB: 209,154,102)
+Created custom color 32 for #5C6370 (RGB: 92,99,112)
+Created custom color 33 for #E06C75 (RGB: 224,108,117)
+Created custom color 34 for #E5C07B (RGB: 229,192,123)
+Created custom color 35 for #56B6C2 (RGB: 86,182,194)
+[39;49m]4;16;rgb:27/2B/33\]4;17;rgb:AA/B1/BE\]4;18;rgb:48/50/61\]4;19;rgb:7F/7F/7F\]4;20;rgb:20/24/2A\]4;21;rgb:60/AE/EE\]4;22;rgb:00/FF/FF\]4;23;rgb:FF/FF/00\]4;24;rgb:00/FF/00\]4;25;rgb:FF/00/FF\]4;26;rgb:51/8A/FF\]4;27;rgb:3D/43/50\]4;28;rgb:2B/30/3B\]4;29;rgb:C5/77/DC\]4;30;rgb:97/C2/78\]4;31;rgb:D0/99/66\]4;32;rgb:5B/62/6F\]4;33;rgb:DF/6B/74\]4;34;rgb:E4/BF/7A\]4;35;rgb:55/B5/C1\[38;5;17m[48;5;16m[H[2J[39;49m(B[m[?1006;1000h[?1003h[6 q[C[38;5;17m[48;5;16m1 [38;5;19m[48;5;16m [38;5;17m[48;5;16m [38;5;32m[48;5;16m#include <stdio.h>[2d[38;5;18m[48;5;16m 2 [38;5;19m[48;5;16m [38;5;17m[48;5;16m [38;5;32m[48;5;16m#include <stdlib.h>[3d[38;5;18m[48;5;16m 3 [38;5;19m[48;5;16m [4d[38;5;18m[48;5;16m 4 [38;5;19m[48;5;16m [38;5;17m[48;5;16m [38;5;32m[48;5;16m// This function calculates the factorial of a given integer n[5d[38;5;18m[48;5;16m 5 [38;5;19m[48;5;16m [38;5;17m[48;5;16m long long factorial(int n) {[6d[38;5;18m[48;5;16m 6 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     long long result = 1;[7d[38;5;18m[48;5;16m 7 [38;5;19m[48;5;16m [8d[38;5;18m[48;5;16m 8 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     [38;5;32m[48;5;16m// A factorial of a negative number doesn't exist in this context,[9d[38;5;18m[48;5;16m 9 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     [38;5;32m[48;5;16m// and 0! is 1. We handle the positive case with a loop.[10d[38;5;18m[48;5;16m10 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     if (n < 0) {[11d[38;5;18m[48;5;16m11 [38;5;19m[48;5;16m [11;14H[38;5;17m[48;5;16mreturn -1; [38;5;32m[48;5;16m// Or some other way to indicate an error[12d[38;5;18m[48;5;16m12 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     } else if (n == 0) {[13d[38;5;18m[48;5;16m13 [38;5;19m[48;5;16m [13;14H[38;5;17m[48;5;16mreturn 1;[14d[38;5;18m[48;5;16m14 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     } else {[15d[38;5;18m[48;5;16m15 [38;5;19m[48;5;16m [15;14H[38;5;17m[48;5;16mfor (int i = 1; i <= n; ++i) {[16d[38;5;18m[48;5;16m16 [38;5;19m[48;5;16m [16;18H[38;5;17m[48;5;16mresult *= i;[17d[38;5;18m[48;5;16m17 [38;5;19m[48;5;16m [17;14H[38;5;17m[48;5;16m}[18d[38;5;18m[48;5;16m18 [38;5;19m[48;5;16m [18;14H[38;5;17m[48;5;16mreturn result;[19d[38;5;18m[48;5;16m19 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     }[20d[38;5;18m[48;5;16m20 [38;5;19m[48;5;16m [38;5;17m[48;5;16m }[21d[38;5;18m[48;5;16m21 [38;5;19m[48;5;16m [22d[38;5;18m[48;5;16m22 [38;5;19m[48;5;16m [38;5;17m[48;5;16m int main() {[23d[38;5;18m[48;5;16m23 [38;5;19m[48;5;16m [38;5;17m[48;5;16m     int num;[24d(B[0;1m[38;5;21m[48;5;20m INSERT (B[0m[38;5;17m[48;5;20m (B[0;1m[38;5;22m[48;5;20mfile.c(B[0m[38;5;21m[48;5;20m [c][38;5;17m[48;5;20m[49X[24;69H(B[0;1m[38;5;23m[48;5;20m1:1 1/44 2%[K[1;6H[39;49m(B[mterminate called after throwing an instance of 'std::bad_alloc'
+  what():  std::bad_alloc

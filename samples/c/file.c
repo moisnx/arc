@@ -1,5 +1,6 @@
 #include <stdio.h>
-
+#include <stdlib.h>
+#include <string.h>
 // This function calculates the factorial of a given integer n
 long long factorial(int n) {
     long long result = 1;

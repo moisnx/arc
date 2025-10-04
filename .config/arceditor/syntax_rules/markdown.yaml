@@ -1,0 +1,5 @@
+language_info:
+  name: "Markown"
+  extensions: ["md"]
+  parser_name: "markdown"
+  query_file_path: "syntax_rules/markdown.scm"

@@ -1,0 +1,5 @@
+language_info:
+  name: "Python"
+  extensions: ["py"]
+  parser_name: "python"
+  query_file_path: "syntax_rules/py.scm"

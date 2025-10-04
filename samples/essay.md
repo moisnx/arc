@@ -126,7 +126,7 @@ echo "Hello, augmented human!"
 
 ---
 
-## 7. Conclusion
+## 7. Conclusion.
 
 Technology is neither inherently good nor evil—it is a **tool shaped by human intention**.
 The printing press empowered knowledge, but also spread propaganda.

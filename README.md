@@ -11,6 +11,7 @@ A modern terminal-based text editor designed for simplicity and efficiency. Arc 
 - **Lightweight**: Fast startup and minimal resource usage
 - **Customizable**: Configurable keybindings and color themes
 
+
 ## 🚀 Quick Start
 
 ### Prerequisites

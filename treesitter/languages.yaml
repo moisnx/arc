@@ -1,0 +1,51 @@
+# Language Registry for Arc Editor
+# This file defines all supported languages and their configurations
+
+languages:
+  c:
+    name: "C"
+    extensions: ["c", "h"]
+    builtin: true
+    parser_name: "c"
+    queries: ["treesitter/queries/c/highlights.scm"]
+  cpp:
+    name: "C++"
+    extensions: ["cpp", "cc", "cxx", "hpp", "hxx"]
+    builtin: true
+    parser_name: "cpp"
+    queries: ["treesitter/queries/c/highlights.scm", "treesitter/queries/cpp/highlights.scm"]
+    
+  python:
+    name: "Python"
+    extensions: ["py", "pyw", "pyi"]
+    builtin: true
+    parser_name: "python"
+    queries: ["treesitter/queries/python/highlights.scm",]
+    
+  rust:
+    name: "Rust"
+    extensions: ["rs"]
+    builtin: true
+    parser_name: "rust"
+    queries: ["treesitter/queries/rust/highlights.scm"]
+    
+  markdown:
+    name: "Markdown"
+    extensions: ["md", "markdown", "mdown", "mkd"]
+    builtin: true
+    parser_name: "markdown"
+    queries: ["treesitter/queries/markdown/highlights.scm", "treesitter/queries/markdown/injections.scm"]
+    
+  javascript:
+    name: "JavaScript"
+    extensions: ["js", "mjs", "jsx"]
+    builtin: true
+    parser_name: "javascript"
+    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_javascript/highlights.scm", "treesitter/queries/_jsx/highlights.scm"]
+
+  typescript:
+    name: "TypeScript"
+    extensions: ["ts", "tsx"]
+    builtin: true
+    parser_name: "typescript"
+    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm",  "treesitter/queries/_jsx/highlights.scm"]

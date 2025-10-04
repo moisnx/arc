@@ -1,19 +1,7 @@
-//===--- Sema.h - Semantic Analysis & AST Building --------------*- C++ -*-===//
-//
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-//
-//===----------------------------------------------------------------------===//
-//
-// This file defines the Sema class, which performs semantic analysis and
-// builds ASTs.
-//
-//===----------------------------------------------------------------------===//
-
 #ifndef LLVM_CLANG_SEMA_SEMA_H
-#define LLVM_CLANG_SEMA_SEMA_H
 
+#define LLVM_CLANG_SEMA_SEMA_H
+#include <string.h>
 #include "clang/APINotes/APINotesManager.h"
 #include "clang/AST/ASTFwd.h"
 #include "clang/AST/ASTLambda.h"
@@ -106,6 +94,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <string.h>
 
 namespace llvm {
 struct InlineAsmIdentifierInfo;

@@ -1,10 +1,13 @@
 #include "editor.h"
 // #include "src/ui/colors.h"
-#include "src/ui/theme_manager.h"
+#include "src/core/config_manager.h"
+#include "src/ui/style_manager.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iostream>
+#include <ncurses.h>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -23,6 +26,12 @@
 
 Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
 {
+  tabSize = ConfigManager::getTabSize();
+}
+void Editor::reloadConfig()
+{
+  tabSize = ConfigManager::getTabSize();
+  // Trigger redisplay to reflect changes
 }
 
 // =================================================================
@@ -33,8 +42,10 @@ void Editor::setMode(EditorMode newMode)
 {
   if (currentMode != newMode)
   {
-    // Save state before mode change for potential undo
-    if (newMode == EditorMode::INSERT)
+    // Only save state for INSERT mode if we're not in the middle of a save
+    // operation
+    if (newMode == EditorMode::INSERT && currentMode == EditorMode::NORMAL &&
+        !isSaving)
     {
       saveState();
     }
@@ -73,11 +84,14 @@ std::string Editor::getFileExtension()
 {
   if (filename.empty())
     return "";
+
   size_t dot = filename.find_last_of(".");
   if (dot == std::string::npos)
     return "";
+
   std::string ext = filename.substr(dot + 1);
   std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
   return ext;
 }
 
@@ -126,8 +140,10 @@ void Editor::positionCursor()
   int screenRow = cursorLine - viewportTop;
   if (screenRow >= 0 && screenRow < viewportHeight)
   {
-    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-    int contentStartCol = lineNumWidth + 3;
+    bool show_line_numbers = ConfigManager::getLineNumbers();
+    int lineNumWidth =
+        show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+    int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
     int screenCol = contentStartCol + cursorCol - viewportLeft;
 
     if (screenCol >= contentStartCol && screenCol < cols)
@@ -150,8 +166,10 @@ bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
   if (mouseRow >= rows - 1)
     return false;
 
-  int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-  int contentStartCol = lineNumWidth + 3;
+  bool show_line_numbers = ConfigManager::getLineNumbers();
+  int lineNumWidth =
+      show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+  int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
 
   if (mouseCol < contentStartCol)
   {
@@ -175,7 +193,9 @@ void Editor::updateCursorAndViewport(int newLine, int newCol)
 {
   cursorLine = newLine;
 
-  std::string expandedLine = expandTabs(buffer.getLine(cursorLine), tabSize);
+  int currentTabSize = ConfigManager::getTabSize();
+  std::string expandedLine =
+      expandTabs(buffer.getLine(cursorLine), currentTabSize);
   cursorCol = std::min(newCol, static_cast<int>(expandedLine.length()));
 
   if (cursorLine < viewportTop)
@@ -189,8 +209,10 @@ void Editor::updateCursorAndViewport(int newLine, int newCol)
 
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
-  int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-  int contentWidth = cols - lineNumWidth - 3;
+  bool show_line_numbers = ConfigManager::getLineNumbers();
+  int lineNumWidth =
+      show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+  int contentWidth = cols - (show_line_numbers ? (lineNumWidth + 3) : 0);
 
   if (cursorCol < viewportLeft)
   {
@@ -213,14 +235,26 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
 
 void Editor::display()
 {
+  if (!validateEditorState())
+  {
+    std::cerr << "DISPLAY ERROR: Invalid state detected!" << std::endl;
+    validateCursorAndViewport();
+    if (!validateEditorState())
+    {
+      std::cerr << "CRITICAL: Could not fix invalid state!" << std::endl;
+      return;
+    }
+  }
+
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
   viewportHeight = rows - 1;
 
-  clear();
-
-  int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-  int contentStartCol = lineNumWidth + 3;
+  // Check if line numbers are enabled
+  bool show_line_numbers = ConfigManager::getLineNumbers();
+  int lineNumWidth =
+      show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+  int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
   int contentWidth = cols - contentStartCol;
 
   int endLine = viewportTop + viewportHeight;
@@ -229,99 +263,130 @@ void Editor::display()
     endLine = buffer.getLineCount();
   }
 
-  // Pre-calculate syntax highlighting for visible lines ONCE
-  std::vector<std::vector<ColorSpan>> lineSpans(endLine - viewportTop);
+  // Tell highlighter which lines are in viewport
   if (syntaxHighlighter)
   {
-    for (int i = viewportTop; i < endLine; i++)
-    {
-      std::string expandedLine = expandTabs(buffer.getLine(i), tabSize);
-      lineSpans[i - viewportTop] =
-          syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
-    }
+    syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
 
-  // Render all lines
+  // Render lines
   for (int i = viewportTop; i < endLine; i++)
   {
     int screenRow = i - viewportTop;
     bool isCurrentLine = (cursorLine == i);
 
     move(screenRow, 0);
+    attrset(COLOR_PAIR(0));
 
-    // Line numbers with consistent color pairs
-    int ln_colorPair = isCurrentLine ? LINE_NUMBERS_ACTIVE : LINE_NUMBERS;
-    attron(COLOR_PAIR(ln_colorPair));
-    printw("%*d ", lineNumWidth, i + 1);
-    attroff(COLOR_PAIR(ln_colorPair));
+    // FIXED: Only render line numbers if enabled
+    if (show_line_numbers)
+    {
+      int ln_colorPair = isCurrentLine ? 3 : 2;
+      attron(COLOR_PAIR(ln_colorPair));
+      printw("%*d ", lineNumWidth, i + 1);
+      attroff(COLOR_PAIR(ln_colorPair));
 
-    move(screenRow, contentStartCol);
+      // Separator
+      attron(COLOR_PAIR(4));
+      addch(' ');
+      attroff(COLOR_PAIR(4));
+      addch(' ');
+    }
 
-    std::string expandedLine = expandTabs(buffer.getLine(i), tabSize);
-    const std::vector<ColorSpan> &currentLineSpans = lineSpans[i - viewportTop];
+    attrset(COLOR_PAIR(0));
 
-    // Render line content
+    // Get tab size from config
+    int currentTabSize = ConfigManager::getTabSize();
+    std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
+    std::vector<ColorSpan> currentLineSpans;
+
+    if (syntaxHighlighter)
+    {
+      try
+      {
+        currentLineSpans =
+            syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
+      }
+      catch (...)
+      {
+        currentLineSpans.clear();
+      }
+    }
+
+    // Content rendering
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
     {
       int fileCol = viewportLeft + screenCol;
-
       bool charExists =
           (fileCol >= 0 && fileCol < static_cast<int>(expandedLine.length()));
       char ch = charExists ? expandedLine[fileCol] : ' ';
 
-      // Find applicable syntax highlighting
-      int currentSyntaxColor = -1;
-      int currentSyntaxAttr = 0;
-      bool hasSyntaxHighlight = false;
-
-      if (charExists)
+      if (charExists && (ch < 32 || ch > 126))
       {
-        for (const auto &span : currentLineSpans)
-        {
-          if (fileCol >= span.start && fileCol < span.end)
-          {
-            currentSyntaxColor = span.colorPair;
-            currentSyntaxAttr = span.attribute;
-            hasSyntaxHighlight = true;
-            break; // Use first matching span
-          }
-        }
+        ch = ' ';
       }
 
       bool isSelected = isPositionSelected(i, fileCol);
 
-      // Apply attributes efficiently - avoid redundant calls
-      if (hasSyntaxHighlight)
-      {
-        attron(COLOR_PAIR(currentSyntaxColor) | currentSyntaxAttr);
-      }
-
       if (isSelected)
       {
-        attron(A_STANDOUT);
+        attron(COLOR_PAIR(14) | A_REVERSE);
+        addch(ch);
+        attroff(COLOR_PAIR(14) | A_REVERSE);
       }
-
-      addch(ch);
-
-      // Remove attributes in reverse order
-      if (isSelected)
+      else
       {
-        attroff(A_STANDOUT);
-      }
+        bool colorApplied = false;
 
-      if (hasSyntaxHighlight)
-      {
-        attroff(COLOR_PAIR(currentSyntaxColor) | currentSyntaxAttr);
+        if (charExists && !currentLineSpans.empty())
+        {
+          for (const auto &span : currentLineSpans)
+          {
+            if (fileCol >= span.start && fileCol < span.end)
+            {
+              if (span.colorPair >= 0 && span.colorPair < COLOR_PAIRS)
+              {
+                attron(COLOR_PAIR(span.colorPair));
+                if (span.attribute != 0)
+                {
+                  attron(span.attribute);
+                }
+                addch(ch);
+                if (span.attribute != 0)
+                {
+                  attroff(span.attribute);
+                }
+                attroff(COLOR_PAIR(span.colorPair));
+                colorApplied = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (!colorApplied)
+        {
+          attrset(COLOR_PAIR(0));
+          addch(ch);
+        }
       }
     }
+
+    attrset(COLOR_PAIR(0));
+    clrtoeol();
   }
 
-  // Draw status bar
+  attrset(COLOR_PAIR(0));
+  for (int i = endLine - viewportTop; i < viewportHeight; i++)
+  {
+    move(i, 0);
+    clrtoeol();
+  }
+
   drawStatusBar();
   positionCursor();
-  updateCursorStyle();
 }
-
+// Also fix the drawStatusBar function
 void Editor::drawStatusBar()
 {
   int rows, cols;
@@ -329,12 +394,10 @@ void Editor::drawStatusBar()
   int statusRow = rows - 1;
 
   move(statusRow, 0);
-  attron(COLOR_PAIR(STATUS_BAR));
-  for (int i = 0; i < cols; i++)
-  {
-    addch(' ');
-  }
-  attroff(COLOR_PAIR(STATUS_BAR));
+
+  // CRITICAL: Set status bar background before clearing
+  attrset(COLOR_PAIR(STATUS_BAR));
+  clrtoeol(); // Clear entire line with status bar background
 
   move(statusRow, 0);
 
@@ -353,21 +416,8 @@ void Editor::drawStatusBar()
     modeColor = STATUS_BAR_ACTIVE;
     break;
   case EditorMode::VISUAL:
-    if (isSelecting)
-    {
-      modeStr = " VISUAL ";
-      modeColor = STATUS_BAR_ACTIVE;
-    }
-    else if (hasSelection)
-    {
-      modeStr = " VISUAL ";
-      modeColor = STATUS_BAR_ACTIVE;
-    }
-    else
-    {
-      modeStr = " VISUAL ";
-      modeColor = STATUS_BAR_ACTIVE;
-    }
+    modeStr = " VISUAL ";
+    modeColor = STATUS_BAR_ACTIVE;
     break;
   }
 
@@ -375,7 +425,7 @@ void Editor::drawStatusBar()
   printw("%s", modeStr.c_str());
   attroff(COLOR_PAIR(modeColor) | A_BOLD);
 
-  attron(COLOR_PAIR(modeColor));
+  attron(COLOR_PAIR(STATUS_BAR));
   printw(" ");
 
   attron(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
@@ -391,7 +441,7 @@ void Editor::drawStatusBar()
                                   : filename;
     printw("%s", displayName.c_str());
   }
-  attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
+  attroff(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
 
   // Show modified indicator
   if (isModified)
@@ -409,6 +459,7 @@ void Editor::drawStatusBar()
     attroff(COLOR_PAIR(STATUS_BAR_ACTIVE));
   }
 
+  // Right section with position info
   char rightSection[256];
   if (hasSelection || currentMode == EditorMode::VISUAL)
   {
@@ -460,14 +511,16 @@ void Editor::drawStatusBar()
     rightStart = currentPos + 2;
   }
 
-  attron(COLOR_PAIR(STATUS_BAR_CYAN));
+  // Fill middle space with status bar background
+  attron(COLOR_PAIR(STATUS_BAR));
   for (int i = currentPos; i < rightStart && i < cols; i++)
   {
     move(statusRow, i);
     addch(' ');
   }
-  attroff(COLOR_PAIR(STATUS_BAR_CYAN));
+  attroff(COLOR_PAIR(STATUS_BAR));
 
+  // Right section
   if (rightStart < cols)
   {
     move(statusRow, rightStart);
@@ -685,7 +738,9 @@ void Editor::moveCursorLeft()
   else if (cursorLine > 0)
   {
     cursorLine--;
-    std::string expandedLine = expandTabs(buffer.getLine(cursorLine), tabSize);
+    int currentTabSize = ConfigManager::getTabSize();
+    std::string expandedLine =
+        expandTabs(buffer.getLine(cursorLine), currentTabSize);
     cursorCol = expandedLine.length();
 
     if (cursorLine < viewportTop)
@@ -695,8 +750,10 @@ void Editor::moveCursorLeft()
 
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
-    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-    int contentWidth = cols - lineNumWidth - 3;
+    bool show_line_numbers = ConfigManager::getLineNumbers();
+    int lineNumWidth =
+        show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+    int contentWidth = cols - (show_line_numbers ? (lineNumWidth + 3) : 0);
 
     if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
     {
@@ -713,7 +770,6 @@ void Editor::moveCursorLeft()
   }
   else if (currentMode == EditorMode::VISUAL)
   {
-    // Update selection end position
     selectionEndLine = cursorLine;
     selectionEndCol = cursorCol;
     hasSelection = true;
@@ -732,7 +788,8 @@ void Editor::moveCursorRight()
     }
     else
     {
-      std::string expandedLine = expandTabs(line, tabSize);
+      int currentTabSize = ConfigManager::getTabSize();
+      std::string expandedLine = expandTabs(line, currentTabSize);
       if (cursorCol < static_cast<int>(expandedLine.length()))
       {
         cursorCol++;
@@ -741,8 +798,10 @@ void Editor::moveCursorRight()
 
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
-    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-    int contentWidth = cols - lineNumWidth - 3;
+    bool show_line_numbers = ConfigManager::getLineNumbers();
+    int lineNumWidth =
+        show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+    int contentWidth = cols - (show_line_numbers ? (lineNumWidth + 3) : 0);
 
     if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
     {
@@ -769,7 +828,6 @@ void Editor::moveCursorRight()
   }
   else if (currentMode == EditorMode::VISUAL)
   {
-    // Update selection end position
     selectionEndLine = cursorLine;
     selectionEndCol = cursorCol;
     hasSelection = true;
@@ -814,13 +872,17 @@ void Editor::moveCursorToLineStart()
 
 void Editor::moveCursorToLineEnd()
 {
-  std::string expandedLine = expandTabs(buffer.getLine(cursorLine), tabSize);
+  int currentTabSize = ConfigManager::getTabSize();
+  std::string expandedLine =
+      expandTabs(buffer.getLine(cursorLine), currentTabSize);
   cursorCol = static_cast<int>(expandedLine.length());
 
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
-  int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-  int contentWidth = cols - lineNumWidth - 3;
+  bool show_line_numbers = ConfigManager::getLineNumbers();
+  int lineNumWidth =
+      show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+  int contentWidth = cols - (show_line_numbers ? (lineNumWidth + 3) : 0);
 
   if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
   {
@@ -937,6 +999,80 @@ void Editor::validateCursorAndViewport()
 // File Operations
 // =================================================================
 
+void Editor::debugPrintState(const std::string &context)
+{
+  std::cerr << "=== EDITOR STATE DEBUG: " << context << " ===" << std::endl;
+  std::cerr << "cursorLine: " << cursorLine << std::endl;
+  std::cerr << "cursorCol: " << cursorCol << std::endl;
+  std::cerr << "viewportTop: " << viewportTop << std::endl;
+  std::cerr << "viewportLeft: " << viewportLeft << std::endl;
+  std::cerr << "buffer.getLineCount(): " << buffer.getLineCount() << std::endl;
+  std::cerr << "buffer.size(): " << buffer.size() << std::endl;
+  std::cerr << "isModified: " << isModified << std::endl;
+  std::cerr << "currentMode: " << (int)currentMode << std::endl;
+
+  if (cursorLine < buffer.getLineCount())
+  {
+    std::string currentLine = buffer.getLine(cursorLine);
+    std::cerr << "currentLine length: " << currentLine.length() << std::endl;
+    std::cerr << "currentLine content: '" << currentLine << "'" << std::endl;
+  }
+  else
+  {
+    std::cerr << "ERROR: cursorLine out of bounds!" << std::endl;
+  }
+
+  std::cerr << "hasSelection: " << hasSelection << std::endl;
+  std::cerr << "isSelecting: " << isSelecting << std::endl;
+  std::cerr << "undoStack.size(): " << undoStack.size() << std::endl;
+  std::cerr << "redoStack.size(): " << redoStack.size() << std::endl;
+  std::cerr << "=== END DEBUG ===" << std::endl;
+}
+
+bool Editor::validateEditorState()
+{
+  bool valid = true;
+
+  if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
+  {
+    std::cerr << "INVALID: cursorLine out of bounds: " << cursorLine
+              << " (max: " << buffer.getLineCount() - 1 << ")" << std::endl;
+    valid = false;
+  }
+
+  if (cursorCol < 0)
+  {
+    std::cerr << "INVALID: cursorCol negative: " << cursorCol << std::endl;
+    valid = false;
+  }
+
+  if (cursorLine >= 0 && cursorLine < buffer.getLineCount())
+  {
+    std::string line = buffer.getLine(cursorLine);
+    if (cursorCol > static_cast<int>(line.length()))
+    {
+      std::cerr << "INVALID: cursorCol past end of line: " << cursorCol
+                << " (line length: " << line.length() << ")" << std::endl;
+      valid = false;
+    }
+  }
+
+  if (viewportTop < 0)
+  {
+    std::cerr << "INVALID: viewportTop negative: " << viewportTop << std::endl;
+    valid = false;
+  }
+
+  if (viewportLeft < 0)
+  {
+    std::cerr << "INVALID: viewportLeft negative: " << viewportLeft
+              << std::endl;
+    valid = false;
+  }
+
+  return valid;
+}
+
 bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
@@ -944,55 +1080,41 @@ bool Editor::loadFile(const std::string &fname)
   if (!buffer.loadFromFile(filename))
   {
     buffer.clear();
-    // Add one empty line for new files
     buffer.insertLine(0, "");
     return false;
   }
 
+  // Set language but DON'T parse yet - parsing happens on first display
   if (syntaxHighlighter)
   {
-    syntaxHighlighter->setLanguage(getFileExtension());
+    std::string extension = getFileExtension();
+    syntaxHighlighter->setLanguage(extension);
   }
 
   isModified = false;
   return true;
 }
 
-bool Editor::saveFile(const std::string &fname)
+bool Editor::saveFile()
 {
-  std::string targetFile = fname.empty() ? filename : fname;
-
-  if (targetFile.empty())
-  {
-    return false; // No filename specified
-  }
-
-  std::ofstream file(targetFile);
-  if (!file.is_open())
+  if (filename.empty())
   {
     return false;
   }
 
-  for (int i = 0; i < buffer.getLineCount(); i++)
+  // Set flag to prevent saveState() during file operations
+  isSaving = true;
+
+  bool success = buffer.saveToFile(filename);
+
+  if (success)
   {
-    file << buffer.getLine(i);
-    if (i < buffer.getLineCount() - 1)
-    {
-      file << "\n";
-    }
+    isModified = false;
   }
 
-  file.close();
-
-  if (!fname.empty())
-  {
-    filename = fname;
-  }
-
-  isModified = false;
-  return true;
+  isSaving = false; // Reset flag
+  return success;
 }
-
 // =================================================================
 // Text Editing Operations
 // =================================================================
@@ -1000,34 +1122,41 @@ bool Editor::saveFile(const std::string &fname)
 void Editor::insertChar(char ch)
 {
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
-  {
-    return; // Invalid line
-  }
+    return;
 
   std::string line = buffer.getLine(cursorLine);
-
-  // CRITICAL: Fix cursor position if it's out of bounds
   if (cursorCol > static_cast<int>(line.length()))
-  {
-    cursorCol = line.length(); // Clamp to end of line
-  }
+    cursorCol = line.length();
   if (cursorCol < 0)
-  {
     cursorCol = 0;
-  }
 
+  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+  // FIRST: Modify the buffer
   line.insert(cursorCol, 1, ch);
   buffer.replaceLine(cursorLine, line);
+
+  // THEN: Notify Tree-sitter with the complete new content
+  if (syntaxHighlighter)
+  {
+    // Get fresh buffer content
+    syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
+                                           cursorCol, cursorLine, cursorCol,
+                                           cursorLine, cursorCol + 1);
+    syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+  }
 
   cursorCol++;
   markModified();
 
-  // Auto-adjust viewport
+  // REMOVED: Don't call notifyBufferChanged() - we already notified
+  // Tree-sitter notifyBufferChanged();
+
+  // Auto-adjust viewport (unchanged)
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
   int lineNumWidth = std::to_string(buffer.getLineCount()).length();
   int contentWidth = cols - lineNumWidth - 3;
-
   if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
   {
     viewportLeft = cursorCol - contentWidth + 1;
@@ -1036,11 +1165,25 @@ void Editor::insertChar(char ch)
 
 void Editor::insertNewline()
 {
+  // Calculate position BEFORE split
+  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+  // Notify Tree-sitter BEFORE modifying buffer
+  if (syntaxHighlighter)
+  {
+    syntaxHighlighter->notifyEdit(
+        byte_pos, 0, 1,        // Inserting newline (1 byte)
+        cursorLine, cursorCol, // Start position
+        cursorLine, cursorCol, // Old end (same as start)
+        cursorLine + 1, 0      // New end (new line created)
+    );
+  }
+
+  // Now modify buffer
   splitLineAtCursor();
   cursorLine++;
   cursorCol = 0;
 
-  // Auto-adjust viewport
   if (cursorLine >= viewportTop + viewportHeight)
   {
     viewportTop = cursorLine - viewportHeight + 1;
@@ -1048,6 +1191,13 @@ void Editor::insertNewline()
 
   viewportLeft = 0;
   markModified();
+
+  // Invalidate affected lines only
+  if (syntaxHighlighter)
+  {
+    syntaxHighlighter->invalidateLineRange(cursorLine - 1,
+                                           buffer.getLineCount() - 1);
+  }
 }
 
 void Editor::deleteChar()
@@ -1056,16 +1206,56 @@ void Editor::deleteChar()
 
   if (cursorCol < static_cast<int>(line.length()))
   {
-    // Delete character at cursor position
+    // Calculate position BEFORE deletion
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+    // Notify Tree-sitter
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->notifyEdit(byte_pos, 1, 0,        // Deleting 1 byte
+                                    cursorLine, cursorCol, // Start position
+                                    cursorLine, cursorCol + 1, // Old end
+                                    cursorLine,
+                                    cursorCol // New end (same as start)
+      );
+    }
+
     line.erase(cursorCol, 1);
     buffer.replaceLine(cursorLine, line);
     markModified();
+
+    // Invalidate only current line
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+    }
   }
   else if (cursorLine < buffer.getLineCount() - 1)
   {
-    // Join with next line
+    // Joining lines - calculate position at end of current line
+    size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
+
+    // Notify Tree-sitter about newline deletion
+    if (syntaxHighlighter)
+    {
+      std::string nextLine = buffer.getLine(cursorLine + 1);
+      syntaxHighlighter->notifyEdit(
+          byte_pos, 1, 0,                      // Deleting newline (1 byte)
+          cursorLine, (uint32_t)line.length(), // Start position
+          cursorLine + 1, 0,                   // Old end (start of next line)
+          cursorLine, (uint32_t)line.length()  // New end (same position)
+      );
+    }
+
     joinLineWithNext();
     markModified();
+
+    // Invalidate from current line to end
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(cursorLine,
+                                             buffer.getLineCount() - 1);
+    }
   }
 }
 
@@ -1073,8 +1263,22 @@ void Editor::backspace()
 {
   if (cursorCol > 0)
   {
-    // Delete character before cursor
+    // NEW: Calculate position BEFORE deletion
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
+
     std::string line = buffer.getLine(cursorLine);
+
+    // Notify Tree-sitter about deletion
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->notifyEdit(
+          byte_pos, 1, 0,            // Deleting 1 byte
+          cursorLine, cursorCol - 1, // Start position
+          cursorLine, cursorCol,     // Old end
+          cursorLine, cursorCol - 1  // New end (same as start after delete)
+      );
+    }
+
     line.erase(cursorCol - 1, 1);
     buffer.replaceLine(cursorLine, line);
 
@@ -1083,38 +1287,38 @@ void Editor::backspace()
     {
       viewportLeft = cursorCol;
     }
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(0, 0);
+    }
     markModified();
+    // notifyBufferChanged();
   }
   else if (cursorLine > 0)
   {
-    // Join with previous line
     std::string currentLine = buffer.getLine(cursorLine);
     std::string prevLine = buffer.getLine(cursorLine - 1);
+
+    // Calculate byte position for line join
+    size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, // Deleting newline (1 byte)
+                                    cursorLine - 1, (uint32_t)prevLine.length(),
+                                    cursorLine, 0, cursorLine - 1,
+                                    (uint32_t)prevLine.length());
+    }
 
     cursorCol = static_cast<int>(prevLine.length());
     cursorLine--;
 
     buffer.replaceLine(cursorLine, prevLine + currentLine);
     buffer.deleteLine(cursorLine + 1);
-
-    // Auto-adjust viewport
-    if (cursorLine < viewportTop)
+    if (syntaxHighlighter)
     {
-      viewportTop = cursorLine;
+      syntaxHighlighter->invalidateLineRange(0, 0);
     }
-
-    int rows, cols;
-    getmaxyx(stdscr, rows, cols);
-    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-    int contentWidth = cols - lineNumWidth - 3;
-
-    if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
-    {
-      viewportLeft = cursorCol - contentWidth + 1;
-      if (viewportLeft < 0)
-        viewportLeft = 0;
-    }
-
     markModified();
   }
 }
@@ -1123,12 +1327,50 @@ void Editor::deleteLine()
 {
   if (buffer.getLineCount() == 1)
   {
-    // Clear the only line
+    // Clearing the only line
+    std::string line = buffer.getLine(0);
+    size_t byte_pos = 0;
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->notifyEdit(byte_pos, line.length(),
+                                    0,    // Deleting entire line
+                                    0, 0, // Start
+                                    0, (uint32_t)line.length(), // Old end
+                                    0, 0                        // New end
+      );
+    }
+
     buffer.replaceLine(0, "");
     cursorCol = 0;
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(0, 0);
+    }
   }
   else
   {
+    // Calculate byte position of line start
+    size_t byte_pos = buffer.lineColToPos(cursorLine, 0);
+    std::string line = buffer.getLine(cursorLine);
+    size_t line_length = line.length();
+
+    // Include newline in deletion if not last line
+    bool has_newline = (cursorLine < buffer.getLineCount() - 1);
+    size_t delete_bytes = line_length + (has_newline ? 1 : 0);
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->notifyEdit(
+          byte_pos, delete_bytes, 0, // Deleting line + newline
+          cursorLine, 0,             // Start of line
+          cursorLine + (has_newline ? 1 : 0),
+          has_newline ? 0 : (uint32_t)line_length, // Old end
+          cursorLine, 0                            // New end
+      );
+    }
+
     buffer.deleteLine(cursorLine);
 
     // Adjust cursor position
@@ -1138,10 +1380,17 @@ void Editor::deleteLine()
     }
 
     // Ensure cursor column is valid
-    std::string line = buffer.getLine(cursorLine);
+    line = buffer.getLine(cursorLine);
     if (cursorCol > static_cast<int>(line.length()))
     {
       cursorCol = static_cast<int>(line.length());
+    }
+
+    // Invalidate from current line to end
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(cursorLine,
+                                             buffer.getLineCount() - 1);
     }
   }
 
@@ -1160,6 +1409,22 @@ void Editor::deleteSelection()
   int endLine = selection.second.first;
   int endCol = selection.second.second;
 
+  // Calculate byte position and length
+  size_t start_byte = buffer.lineColToPos(startLine, startCol);
+  size_t end_byte = buffer.lineColToPos(endLine, endCol);
+  size_t delete_bytes = end_byte - start_byte;
+
+  // Notify Tree-sitter BEFORE modification
+  if (syntaxHighlighter)
+  {
+    syntaxHighlighter->notifyEdit(start_byte, delete_bytes,
+                                  0,                   // Deleting selection
+                                  startLine, startCol, // Start
+                                  endLine, endCol,     // Old end
+                                  startLine, startCol // New end (back to start)
+    );
+  }
+
   if (startLine == endLine)
   {
     // Single line selection
@@ -1173,12 +1438,11 @@ void Editor::deleteSelection()
     std::string firstLine = buffer.getLine(startLine);
     std::string lastLine = buffer.getLine(endLine);
 
-    // Combine parts before selection start and after selection end
     std::string newLine =
         firstLine.substr(0, startCol) + lastLine.substr(endCol);
     buffer.replaceLine(startLine, newLine);
 
-    // Delete the lines in between (including the last line)
+    // Delete the lines in between
     for (int i = endLine; i > startLine; i--)
     {
       buffer.deleteLine(i);
@@ -1189,6 +1453,13 @@ void Editor::deleteSelection()
   updateCursorAndViewport(startLine, startCol);
   clearSelection();
   markModified();
+
+  // Invalidate affected lines
+  if (syntaxHighlighter)
+  {
+    syntaxHighlighter->invalidateLineRange(startLine,
+                                           buffer.getLineCount() - 1);
+  }
 }
 
 // =================================================================
@@ -1197,12 +1468,13 @@ void Editor::deleteSelection()
 
 void Editor::saveState()
 {
-  EditorState state = getCurrentState();
+  if (isSaving)
+    return; // Skip saving state during file operations
 
+  EditorState state = getCurrentState();
   undoStack.push(state);
   limitUndoStack();
 
-  // Clear redo stack when new state is saved
   while (!redoStack.empty())
   {
     redoStack.pop();
@@ -1213,15 +1485,18 @@ void Editor::undo()
 {
   if (!undoStack.empty())
   {
-    // Save current state to redo stack
     redoStack.push(getCurrentState());
-
-    // Restore previous state
     EditorState state = undoStack.top();
     undoStack.pop();
     restoreState(state);
 
-    isModified = true; // Mark as modified since we changed something
+    // Full reparse needed after undo
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->bufferChanged(buffer);
+    }
+
+    isModified = true;
   }
 }
 
@@ -1229,13 +1504,16 @@ void Editor::redo()
 {
   if (!redoStack.empty())
   {
-    // Save current state to undo stack
     undoStack.push(getCurrentState());
-
-    // Restore next state
     EditorState state = redoStack.top();
     redoStack.pop();
     restoreState(state);
+
+    // Full reparse needed after redo
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->bufferChanged(buffer);
+    }
 
     isModified = true;
   }
@@ -1245,7 +1523,7 @@ EditorState Editor::getCurrentState()
 {
   EditorState state;
 
-  // Serialize buffer content
+  // Your existing serialization code
   std::ostringstream oss;
   for (int i = 0; i < buffer.getLineCount(); i++)
   {
@@ -1257,6 +1535,7 @@ EditorState Editor::getCurrentState()
   }
   state.content = oss.str();
 
+  // Save cursor/viewport state regardless
   state.cursorLine = cursorLine;
   state.cursorCol = cursorCol;
   state.viewportTop = viewportTop;
@@ -1414,6 +1693,9 @@ std::string Editor::getSelectedText()
       }
     }
   }
+
+  // CRITICAL FIX: Actually return the result!
+  return result.str();
 }
 
 void Editor::updateCursorStyle()
@@ -1426,7 +1708,7 @@ void Editor::updateCursorStyle()
     fflush(stdout);
     break;
   case EditorMode::INSERT:
-    // Vertical bar cursor (thin line like VSCode/modern editors)
+    // Vertical bar cursor (thin lifne like VSCode/modern editors)
     printf("\033[6 q");
     fflush(stdout);
     break;
@@ -1447,4 +1729,13 @@ void Editor::restoreDefaultCursor()
   // Restore default cursor (usually blinking block)
   printf("\033[0 q");
   fflush(stdout);
+}
+
+void Editor::initializeViewportHighlighting()
+{
+  if (syntaxHighlighter)
+  {
+    // Pre-parse viewport so first display() is instant
+    syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
+  }
 }

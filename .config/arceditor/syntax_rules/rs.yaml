@@ -1,0 +1,5 @@
+language_info:
+  name: "Rust"
+  extensions: ["rs"]
+  parser_name: "rust"
+  query_file_path: "syntax_rules/rs.scm"
