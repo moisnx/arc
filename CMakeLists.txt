@@ -63,7 +63,15 @@ if(TREE_SITTER_ENABLED)
             ${DEPS_DIR}/tree-sitter-core/lib/include
         )
         # Explicitly set C standard for C files
-        target_compile_features(tree-sitter-core PUBLIC c_std_99) 
+        target_compile_features(tree-sitter-core PUBLIC c_std_99)
+        
+        # Force static runtime for Tree-sitter to match main executable
+        if(MSVC)
+            target_compile_options(tree-sitter-core PRIVATE 
+                $<$<CONFIG:Debug>:/MTd>
+                $<$<CONFIG:Release>:/MT>
+            )
+        endif()
         
         set(TS_LIBRARIES tree-sitter-core)
         set(TS_INCLUDES ${DEPS_DIR}/tree-sitter-core/lib/include)
@@ -143,6 +151,14 @@ if(TREE_SITTER_ENABLED)
         
         # Set C99 standard
         target_compile_features(tree-sitter-${lang_name} PUBLIC c_std_99)
+        
+        # Force static runtime for parsers to match main executable
+        if(MSVC)
+            target_compile_options(tree-sitter-${lang_name} PRIVATE 
+                $<$<CONFIG:Debug>:/MTd>
+                $<$<CONFIG:Release>:/MT>
+            )
+        endif()
         
         # Include directories for scanner files
         target_include_directories(tree-sitter-${lang_name} PRIVATE 
@@ -280,6 +296,14 @@ if(EFSW_SOURCES)
         ${EFSW_BASE_DIR}/include
         ${EFSW_BASE_DIR}/src
     )
+    
+    # Force static runtime for EFSW to match main executable
+    if(MSVC)
+        target_compile_options(efsw PRIVATE 
+            $<$<CONFIG:Debug>:/MTd>
+            $<$<CONFIG:Release>:/MT>
+        )
+    endif()
     
     find_package(Threads REQUIRED)
     target_link_libraries(efsw PRIVATE Threads::Threads)
