@@ -31,3 +31,6 @@
 [submodule "deps/tree-sitter-zig"]
 	path = deps/tree-sitter-zig
 	url = https://github.com/GrayJack/tree-sitter-zig
+[submodule "deps/tree-sitter-go"]
+	path = deps/tree-sitter-go
+	url = https://github.com/tree-sitter/tree-sitter-go
