@@ -372,15 +372,6 @@ int main(int argc, char *argv[])
 
     key = getch();
 
-#ifdef _WIN32
-    // CRITICAL: On Windows, flush queue after every keypress
-    // This prevents event buildup
-    if (key != ERR)
-    {
-      flushInputQueue();
-    }
-#endif
-
     if (key == 'q' || key == 'Q')
     {
       if (editor.getMode() == EditorMode::NORMAL)
@@ -444,12 +435,10 @@ bool initializeNcurses()
   keypad(stdscr, TRUE);
   noecho();
   curs_set(1);
-
 #ifdef _WIN32
-  // Use blocking mode on Windows - timeout causes issues
-  timeout(-1); // Block indefinitely
-  PDC_set_blink(FALSE);
-  PDC_return_key_modifiers(TRUE);
+  timeout(100);                   // Longer timeout on Windows
+  PDC_set_blink(FALSE);           // Disable blinking (PDCurses specific)
+  PDC_return_key_modifiers(TRUE); // Better key handling
 #else
   timeout(50);
 #endif
