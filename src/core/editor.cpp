@@ -238,6 +238,7 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
+// Replace your current display() function in editor.cpp
 void Editor::display()
 {
   if (!validateEditorState())
@@ -255,7 +256,6 @@ void Editor::display()
   getmaxyx(stdscr, rows, cols);
   viewportHeight = rows - 1;
 
-  // Check if line numbers are enabled
   bool show_line_numbers = ConfigManager::getLineNumbers();
   int lineNumWidth =
       show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
@@ -268,11 +268,28 @@ void Editor::display()
     endLine = buffer.getLineCount();
   }
 
+  // OPTIMIZATION 1: Pre-compute selection bounds ONCE
+  bool hasActiveSelection = (hasSelection || isSelecting);
+  int sel_start_line = -1, sel_start_col = -1;
+  int sel_end_line = -1, sel_end_col = -1;
+
+  if (hasActiveSelection)
+  {
+    auto [start, end] = getNormalizedSelection();
+    sel_start_line = start.first;
+    sel_start_col = start.second;
+    sel_end_line = end.first;
+    sel_end_col = end.second;
+  }
+
   // Tell highlighter which lines are in viewport
   if (syntaxHighlighter)
   {
     syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
+
+  // Get tab size once
+  int currentTabSize = ConfigManager::getTabSize();
 
   // Render lines
   for (int i = viewportTop; i < endLine; i++)
@@ -283,7 +300,7 @@ void Editor::display()
     move(screenRow, 0);
     attrset(COLOR_PAIR(0));
 
-    // FIXED: Only render line numbers if enabled
+    // Render line numbers
     if (show_line_numbers)
     {
       int ln_colorPair = isCurrentLine ? 3 : 2;
@@ -291,7 +308,6 @@ void Editor::display()
       printw("%*d ", lineNumWidth, i + 1);
       attroff(COLOR_PAIR(ln_colorPair));
 
-      // Separator
       attron(COLOR_PAIR(4));
       addch(' ');
       attroff(COLOR_PAIR(4));
@@ -300,8 +316,7 @@ void Editor::display()
 
     attrset(COLOR_PAIR(0));
 
-    // Get tab size from config
-    int currentTabSize = ConfigManager::getTabSize();
+    // OPTIMIZATION 2: Expand tabs once per line
     std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
     std::vector<ColorSpan> currentLineSpans;
 
@@ -318,6 +333,14 @@ void Editor::display()
       }
     }
 
+    // OPTIMIZATION 3: Pre-check if this line is in selection range
+    bool lineHasSelection =
+        hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
+
+    // OPTIMIZATION 4: Track current span index (avoid O(n) per character)
+    int current_span_idx = 0;
+    int num_spans = currentLineSpans.size();
+
     // Content rendering
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
     {
@@ -331,7 +354,27 @@ void Editor::display()
         ch = ' ';
       }
 
-      bool isSelected = isPositionSelected(i, fileCol);
+      // OPTIMIZATION 5: Fast selection check (no function call)
+      bool isSelected = false;
+      if (lineHasSelection && charExists)
+      {
+        if (sel_start_line == sel_end_line)
+        {
+          isSelected = (fileCol >= sel_start_col && fileCol < sel_end_col);
+        }
+        else if (i == sel_start_line)
+        {
+          isSelected = (fileCol >= sel_start_col);
+        }
+        else if (i == sel_end_line)
+        {
+          isSelected = (fileCol < sel_end_col);
+        }
+        else
+        {
+          isSelected = true; // Middle line, fully selected
+        }
+      }
 
       if (isSelected)
       {
@@ -343,10 +386,20 @@ void Editor::display()
       {
         bool colorApplied = false;
 
-        if (charExists && !currentLineSpans.empty())
+        // OPTIMIZATION 6: Sequential span lookup instead of linear search
+        if (charExists && num_spans > 0)
         {
-          for (const auto &span : currentLineSpans)
+          // Skip spans that are completely before this character
+          while (current_span_idx < num_spans &&
+                 currentLineSpans[current_span_idx].end <= fileCol)
           {
+            current_span_idx++;
+          }
+
+          // Check if current span covers this character
+          if (current_span_idx < num_spans)
+          {
+            const auto &span = currentLineSpans[current_span_idx];
             if (fileCol >= span.start && fileCol < span.end)
             {
               if (span.colorPair >= 0 && span.colorPair < COLOR_PAIRS)
@@ -363,7 +416,6 @@ void Editor::display()
                 }
                 attroff(COLOR_PAIR(span.colorPair));
                 colorApplied = true;
-                break;
               }
             }
           }

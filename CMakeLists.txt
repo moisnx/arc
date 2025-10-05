@@ -95,7 +95,7 @@ if(TREE_SITTER_ENABLED)
     # Define parsers - use CMake lists instead of colon-separated strings
     # Format: list of pairs (lang_name, parser_path)
     set(PARSER_NAMES 
-        "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx"
+        "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx" "zig"
     )
     set(PARSER_PATHS
         "${DEPS_DIR}/tree-sitter-python"
@@ -106,6 +106,7 @@ if(TREE_SITTER_ENABLED)
         "${DEPS_DIR}/tree-sitter-javascript"
         "${DEPS_DIR}/tree-sitter-typescript/typescript"
         "${DEPS_DIR}/tree-sitter-typescript/tsx"
+        "${DEPS_DIR}/tree-sitter-zig"
     )
     
     set(DISCOVERED_PARSERS "")

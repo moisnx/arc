@@ -1,314 +1,194 @@
-; Variables
-
-(identifier) @variable
-
-; Parameters
-
-(parameter
-  name: (identifier) @variable.parameter)
-
-(payload
-  (identifier) @variable.parameter)
+; This is a fork from https://github.com/GrayJack/tree-sitter-zig/queries
 
 ; Types
 
-(parameter
-  type: (identifier) @type)
+; Zig
 
-((identifier) @type
-  (#match? @type "^[A-Z_][a-zA-Z0-9_]*"))
+; Variables
+; --------------
+(identifier) @variable
 
-(variable_declaration
-  (identifier) @type
-  "="
-  [
-    (struct_declaration)
-    (enum_declaration)
-    (union_declaration)
-    (opaque_declaration)
-  ])
+(parameter (identifier) @variable)
 
-[
-  (builtin_type)
-  "anyframe"
-] @type.builtin
+; ((identifier) @constant
+;  (#vim-match? @constant "^[A-Z][A-Z\\d_]+$'"))
 
-; Constants
+; function definition
+(function_signature
+  (identifier) @function
+)
 
-((identifier) @constant
-  (#match? @constant "^[A-Z][A-Z_0-9]+$"))
+(function_declaration (identifier) @function)
 
-[
-  "null"
-  "unreachable"
-  "undefined"
-] @constant.builtin
+; Function calls
+; (call_expression
+;   function: (identifier)) @function
 
-(field_expression
-  .
-  member: (identifier) @constant)
+(build_in_call_expr
+  function: (identifier) @function.builtin
+)
 
-(enum_declaration
-  (container_field
-    type: (identifier) @constant))
+;; other identifiers
+(type_identifier) @type
+(primitive_type) @type.builtin
+(field_identifier) @property
 
-; Labels
+(line_comment) @comment
+(doc_comment) @comment
 
-(block_label
-  (identifier) @label)
+(char_literal) @number
+(integer_literal) @number
+(float_literal) @number
 
-(break_label
-  (identifier) @label)
+(boolean_literal) @constant.builtin
+(undefined_literal) @constant.builtin
+(null_literal) @constant.builtin
 
-; Fields
+(ERROR) @error
 
-(field_initializer
-  .
-  (identifier) @variable.other.member)
+(string_literal) @string
+(multiline_string_literal "\\\\" @string.special) 
 
-(field_expression
-  (_)
-  member: (identifier) @variable.other.member)
+(escape_sequence) @constant.builtin
 
-(field_expression
-  (_)
-  member: (identifier) @type (#match? @type "^[A-Z_][a-zA-Z0-9_]*"))
+(label_identifier) @label_identifier
 
-(field_expression
-  (_)
-  member: (identifier) @constant (#match? @constant "^[A-Z][A-Z_0-9]+$"))
+(call_modifier) @keyword ; async
 
-(container_field
-  name: (identifier) @variable.other.member)
-
-(initializer_list
-  (assignment_expression
-      left: (field_expression
-              .
-              member: (identifier) @variable.other.member)))
-
-; Functions
-
-(builtin_identifier) @function.builtin
-
-(call_expression
-  function: (identifier) @function)
-
-(call_expression
-  function: (field_expression
-    member: (identifier) @function.method))
-
-(function_declaration
-  name: (identifier) @function)
-
-; Modules
-
-(variable_declaration
-  (_)
-  (builtin_function
-    (builtin_identifier) @keyword.control.import
-    (#any-of? @keyword.control.import "@import" "@cImport")))
-
-(variable_declaration
-  (_)
-  (field_expression
-    object: (builtin_function
-      (builtin_identifier) @keyword.control.import
-      (#any-of? @keyword.control.import "@import" "@cImport"))))
-
-; Builtins
+(binary_operator) @keyword.operator
 
 [
-  "c"
-  "..."
-] @variable.builtin
-
-((identifier) @variable.builtin
-  (#eq? @variable.builtin "_"))
-
-(calling_convention
-  (identifier) @variable.builtin)
-
-; Keywords
-
-[
-  "asm"
-  "test"
-] @keyword
-
-[
-  "error"
-  "const"
-  "var"
-  "struct"
-  "union"
-  "enum"
-  "opaque"
-] @keyword.storage.type
-
-; todo: keyword.coroutine
-[
-  "async"
+  "align"
+  "allowzero"
+  ; "and"
+  ; "anyframe"
+  ; "anytype"
+  ;"asm"
   "await"
-  "suspend"
-  "nosuspend"
+  "break"
+  ; "callconv"
+  ; "catch"
+  "comptime"
+  "const"
+  "continue"
+  "defer"
+  "else"
+  "enum"
+  "errdefer"
+  "error"
+  "export"
+  "extern"
+  "false"
+  "for"
+  "if"
+  "inline"
+  ; "noalias"
+  ; "nosuspend"
+  ; "noinline"
+  "null"
+  ; "opaque"
+  ; "or"
+  ; "orelse"
+  ; "packed"
+  "pub"
   "resume"
+  "return"
+  ; "linksection"
+  "struct"
+  "suspend"
+  "switch"
+  "test"
+  ; "threadlocal"
+  "true"
+  "try"
+  ; "undefined"
+  "union"
+  ;"unreachable"
+  "usingnamespace"
+  "var"
+  "volatile"
+  "while"
 ] @keyword
 
 "fn" @keyword.function
 
 [
-  "and"
-  "or"
-  "orelse"
-] @keyword.operator
-
-[
-  "try"
-  "unreachable"
-  "return"
-] @keyword.control.return
-
-[
-  "if"
+  "continue"
   "else"
+  "if"
   "switch"
-  "catch"
-] @keyword.control.conditional
+] @conditional
 
 [
   "for"
   "while"
-  "break"
-  "continue"
-] @keyword.control.repeat
+] @repeat
+
+(assignment_modifier) @attribute
 
 [
-  "usingnamespace"
-  "export"
-] @keyword.control.import
-
-[
-  "defer"
-  "errdefer"
-] @keyword.control.exception
-
-[
-  "volatile"
-  "allowzero"
-  "noalias"
-  "addrspace"
-  "align"
-  "callconv"
-  "linksection"
-  "pub"
-  "inline"
-  "noinline"
-  "extern"
-  "comptime"
-  "packed"
-  "threadlocal"
-] @keyword.storage.modifier
-
-; Operator
-
-[
-  "="
-  "*="
-  "*%="
-  "*|="
-  "/="
-  "%="
-  "+="
-  "+%="
-  "+|="
-  "-="
-  "-%="
-  "-|="
-  "<<="
-  "<<|="
-  ">>="
-  "&="
-  "^="
-  "|="
-  "!"
-  "~"
-  "-"
-  "-%"
-  "&"
-  "=="
-  "!="
-  ">"
-  ">="
-  "<="
-  "<"
-  "&"
-  "^"
-  "|"
-  "<<"
-  ">>"
-  "<<|"
-  "+"
-  "++"
-  "+%"
-  "-%"
-  "+|"
-  "-|"
-  "*"
-  "/"
-  "%"
-  "**"
-  "*%"
-  "*|"
-  "||"
-  ".*"
-  ".?"
-  "?"
-  ".."
-] @operator
-
-; Literals
-
-(character) @constant.character
-
-[
-  (string)
-  (multiline_string)
-] @string
-
-(integer) @constant.numeric.integer
-
-(float) @constant.numeric.float
-
-(boolean) @constant.builtin.boolean
-
-(escape_sequence) @constant.character.escape
-
-; Punctuation
-
-[
-  "["
-  "]"
+  ".{"
   "("
   ")"
+  "["
+  "]"
   "{"
   "}"
 ] @punctuation.bracket
 
 [
+  "&"
+  "&="
+  "*"
+  "*="
+  ;"*%"
+  "*%="
+  ;"^"
+  "^="
+  ":"
+  ","
+  "."
+  ".."
+  "..."
+  ".*"
+  ".?"
+  "="
+  ;"=="
+  "=>"
+  "!"
+  ;"!="
+  ;"<"
+  ;"<<"
+  "<<="
+  ; "<="
+  "-"
+  "-="
+  "-%"
+  "-%="
+  ;"->"
+  ;"%"
+  "%="
+  "|"
+  ;"||"
+  "|="
+  ;"+"
+  ;"++"
+  "+="
+  ;"+%"
+  "+%="
+  "?"
+  ;">"
+  ;">>"
+  ">>="
+  ;">="
+  ;"/"
+  "/="
+  "~"
+] @operator
+
+[
   ";"
   "."
   ","
-  ":"
-  "=>"
-  "->"
 ] @punctuation.delimiter
 
-(payload "|" @punctuation.bracket)
-
-; Comments
-
-(comment) @comment.line
-
-((comment) @comment.block.documentation
-  (#match? @comment.block.documentation "^//!"))

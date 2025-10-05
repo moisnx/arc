@@ -53,20 +53,38 @@ bool GapBuffer::loadFromFile(const std::string &filename)
   }
   file.close();
 
-  // --- Step 2: Clear and Initial Buffer Sizing ---
+  // --- Step 2: Check if normalization is needed ---
+  const char *src = content.data();
+  bool has_carriage_returns = false;
+
+  // OPTIMIZATION: Quick scan for \r (memchr is highly optimized)
+  if (std::memchr(src, '\r', fileSize) != nullptr)
+  {
+    has_carriage_returns = true;
+  }
+
+  // --- Step 3: Clear and Initial Buffer Sizing ---
   clear();
 
-  // Prepare buffer with maximum possible size (fileSize) + gap size.
-  // We will resize down later based on the actual normalized size.
+  if (!has_carriage_returns)
+  {
+    // FAST PATH: No normalization needed, direct copy
+    buffer.resize(fileSize + DEFAULT_GAP_SIZE);
+    char *dest = buffer.data() + DEFAULT_GAP_SIZE;
+
+    std::memcpy(dest, src, fileSize);
+
+    buffer.resize(fileSize + DEFAULT_GAP_SIZE);
+    gapStart = 0;
+    gapSize = DEFAULT_GAP_SIZE;
+    invalidateLineIndex();
+
+    return true;
+  }
+
+  // SLOW PATH: Normalization required
   buffer.resize(fileSize + DEFAULT_GAP_SIZE);
-
-  // Set the destination pointer to the beginning of the text part (after the
-  // initial gap)
   char *dest = buffer.data() + DEFAULT_GAP_SIZE;
-
-  // --- Step 3: Single-Pass Normalization and Copy ---
-  // Perform copy/normalization directly from 'content' to 'buffer'
-  const char *src = content.data();
   size_t actualTextSize = 0;
 
   for (std::streamsize i = 0; i < fileSize; ++i)
@@ -79,8 +97,7 @@ bool GapBuffer::loadFromFile(const std::string &filename)
       if (i + 1 < fileSize && src[i + 1] == '\n')
       {
         c = '\n';
-        i++; // Advance source index to consume the next character (\n) as part
-             // of this sequence
+        i++; // Skip next \n
       }
       else
       {
@@ -89,23 +106,14 @@ bool GapBuffer::loadFromFile(const std::string &filename)
       }
     }
 
-    // Write the normalized character directly into the Gap Buffer
     *dest++ = c;
     actualTextSize++;
   }
 
   // --- Step 4: Finalize Gap Buffer State ---
-
-  // 1. Trim the buffer to the actual size needed (normalized text size + gap
-  // size)
-  //    This is CRITICAL to ensure textSize() reports the correct value.
   buffer.resize(actualTextSize + DEFAULT_GAP_SIZE);
-
-  // 2. Set gap at the beginning
   gapStart = 0;
   gapSize = DEFAULT_GAP_SIZE;
-
-  // 3. Mark the line index as dirty for rebuilding
   invalidateLineIndex();
 
   return true;

@@ -24,12 +24,155 @@ bool initializeThemes();
 void setupMouse();
 void cleanupMouse();
 
+enum class BenchmarkMode
+{
+  NONE,
+  STARTUP_ONLY,        // Just ncurses + theme init (your current --quit)
+  STARTUP_INTERACTIVE, // Full init to first input ready (RECOMMENDED)
+  FILE_LOAD,           // Measure file loading separately
+  FULL_CYCLE           // Complete startup + single operation + exit
+};
+
+struct BenchmarkResult
+{
+  std::chrono::milliseconds init_time;
+  std::chrono::milliseconds theme_time;
+  std::chrono::milliseconds editor_creation_time;
+  std::chrono::milliseconds file_load_time;
+  std::chrono::milliseconds first_render_time;
+  std::chrono::milliseconds syntax_highlight_time;
+  std::chrono::milliseconds total_time;
+
+  void print(std::ostream &os) const
+  {
+    os << "=== Benchmark Results ===" << std::endl;
+    os << "Init (ncurses):        " << init_time.count() << "ms" << std::endl;
+    os << "Theme load:            " << theme_time.count() << "ms" << std::endl;
+    os << "Editor creation:       " << editor_creation_time.count() << "ms"
+       << std::endl;
+    os << "File load:             " << file_load_time.count() << "ms"
+       << std::endl;
+    os << "Syntax highlighting:   " << syntax_highlight_time.count() << "ms"
+       << std::endl;
+    os << "First render:          " << first_render_time.count() << "ms"
+       << std::endl;
+    os << "------------------------" << std::endl;
+    os << "TOTAL (user-perceived): " << total_time.count() << "ms" << std::endl;
+  }
+};
+
+BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
+                                               bool enable_syntax_highlighting)
+{
+
+  BenchmarkResult result{};
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // Phase 1: Initialize ncurses
+  disableXonXoff();
+  if (!initializeNcurses())
+  {
+    throw std::runtime_error("ncurses init failed");
+  }
+  if (!initializeThemes())
+  {
+    endwin();
+    throw std::runtime_error("theme init failed");
+  }
+
+  auto after_init = std::chrono::high_resolution_clock::now();
+  result.init_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(after_init - start);
+
+  // Phase 2: Load theme
+  std::string active_theme = ConfigManager::getActiveTheme();
+  std::string theme_file = ConfigManager::getThemeFile(active_theme);
+  if (!theme_file.empty())
+  {
+    g_style_manager.load_theme_from_file(theme_file);
+  }
+
+  auto after_theme = std::chrono::high_resolution_clock::now();
+  result.theme_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+      after_theme - after_init);
+
+  // Phase 3: Create syntax highlighter (if enabled)
+  SyntaxHighlighter syntaxHighlighter;
+  SyntaxHighlighter *highlighterPtr = nullptr;
+
+  if (enable_syntax_highlighting)
+  {
+    std::string syntax_dir = ConfigManager::getSyntaxRulesDir();
+    if (syntaxHighlighter.initialize(syntax_dir))
+    {
+      highlighterPtr = &syntaxHighlighter;
+    }
+  }
+
+  auto after_highlighter_init = std::chrono::high_resolution_clock::now();
+
+  // Phase 4: Create editor and load file
+  Editor editor(highlighterPtr);
+
+  auto after_editor_creation = std::chrono::high_resolution_clock::now();
+  result.editor_creation_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          after_editor_creation - after_theme);
+
+  if (!editor.loadFile(filename))
+  {
+    endwin();
+    throw std::runtime_error("Failed to load file");
+  }
+
+  auto after_file_load = std::chrono::high_resolution_clock::now();
+  result.file_load_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+      after_file_load - after_editor_creation);
+
+  // Phase 5: Initialize syntax highlighting for viewport
+  if (highlighterPtr)
+  {
+    editor.initializeViewportHighlighting();
+  }
+
+  auto after_syntax = std::chrono::high_resolution_clock::now();
+  result.syntax_highlight_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(after_syntax -
+                                                            after_file_load);
+
+  // Phase 6: Render first display
+  editor.setMode(EditorMode::INSERT);
+  editor.display();
+  refresh();
+
+  auto after_render = std::chrono::high_resolution_clock::now();
+  result.first_render_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(after_render -
+                                                            after_syntax);
+
+  // This is the "interactive ready" point - user can now type
+  result.total_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+      after_render - start);
+
+  // Cleanup
+  endwin();
+
+  return result;
+}
+
 int main(int argc, char *argv[])
 {
   if (argc < 2)
   {
-    std::cerr << "Usage: " << argv[0]
-              << " <filename> [--bench-quit] [--none] [--quit]" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " <filename> [options]" << std::endl;
+    std::cerr << "\nBenchmark options:" << std::endl;
+    std::cerr << "  --bench-startup          Benchmark startup to interactive"
+              << std::endl;
+    std::cerr
+        << "  --bench-startup-nosyntax Same but without syntax highlighting"
+        << std::endl;
+    std::cerr << "  --bench-file-only        Benchmark only file loading"
+              << std::endl;
     return 1;
   }
 
@@ -44,6 +187,13 @@ int main(int argc, char *argv[])
       std::any_of(args.begin(), args.end(),
                   [](const auto &arg) { return arg == "--quit"; });
 
+  //   Bechmark
+  bool bench_startup = std::any_of(args.begin(), args.end(), [](const auto &arg)
+                                   { return arg == "--bench-startup"; });
+  bool bench_startup_nosyntax =
+      std::any_of(args.begin(), args.end(), [](const auto &arg)
+                  { return arg == "--bench-startup-nosyntax"; });
+
   std::string filename = std::filesystem::absolute(argv[1]).string();
 
   // Initialize config
@@ -54,29 +204,67 @@ int main(int argc, char *argv[])
   ConfigManager::copyProjectFilesToConfig();
   ConfigManager::loadConfig();
 
-  // BENCHMARK PATH: Load file and quit immediately
-  if (bench_quit)
+  if (bench_startup || bench_startup_nosyntax)
   {
-    SyntaxHighlighter syntaxHighlighter;
-    Editor editor(force_no_highlighting ? nullptr : &syntaxHighlighter);
-
-    if (!force_no_highlighting)
+    try
     {
-      std::string syntax_dir = ConfigManager::getSyntaxRulesDir();
-      if (syntaxHighlighter.initialize(syntax_dir))
-      {
-        editor.setSyntaxHighlighter(&syntaxHighlighter);
-        editor.updateSyntaxHighlighting();
-      }
+      BenchmarkResult result =
+          runStartupInteractiveBenchmark(filename, !bench_startup_nosyntax);
+
+      result.print(std::cerr);
+      return 0;
     }
-
-    if (!editor.loadFile(filename))
+    catch (const std::exception &e)
     {
-      std::cerr << "Error: Could not open file " << filename << std::endl;
+      std::cerr << "Benchmark failed: " << e.what() << std::endl;
       return 1;
     }
+  }
+  // BENCHMARK PATH: Load file and quit immediately
+  if (quit_immediately)
+  {
+    auto start = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Benchmark complete. File loaded successfully." << std::endl;
+    // Initialize ncurses (users see this cost)
+    disableXonXoff();
+    if (!initializeNcurses())
+      return 1;
+    if (!initializeThemes())
+      return 1;
+
+    auto after_init = std::chrono::high_resolution_clock::now();
+
+    // Load theme (users see this)
+    std::string active_theme = ConfigManager::getActiveTheme();
+    std::string theme_file = ConfigManager::getThemeFile(active_theme);
+    if (!theme_file.empty())
+    {
+      g_style_manager.load_theme_from_file(theme_file);
+    }
+
+    auto after_theme = std::chrono::high_resolution_clock::now();
+
+    // Render once (users see this)
+    // editor.display();
+    refresh();
+
+    auto after_render = std::chrono::high_resolution_clock::now();
+
+    // Cleanup
+    endwin();
+
+    // Print timings to stderr (won't interfere with hyperfine)
+    auto ms = [](auto s, auto e)
+    {
+      return std::chrono::duration_cast<std::chrono::milliseconds>(e - s)
+          .count();
+    };
+
+    std::cerr << "Init: " << ms(start, after_init) << "ms, "
+              << "Theme: " << ms(after_init, after_theme) << "ms, "
+              << "Render: " << ms(after_theme, after_render) << "ms, "
+              << "Total: " << ms(start, after_render) << "ms" << std::endl;
+
     return 0;
   }
 

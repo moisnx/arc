@@ -1,68 +1,45 @@
-# 🎨 Catppuccin Mocha Color Scheme: A soothing, dark aesthetic
 name: "Catppuccin Mocha"
 
 # 💻 UI Colors
-# Base: Background color
-background: "#1e1e2e"
-# Text: Primary foreground text color
-foreground: "#cdd6f4"
-# Lavender: Cursor color
-cursor: "#b4befe"
-# Surface1: Selection highlight color
-selection: "#45475a"
-# Surface0: Line highlight background color
+background: "#1E1E2E"
+foreground: "#CDD6F4"
+cursor: "#B4BEFE"
+selection: "#45475A"
 line_highlight: "#313244"
-# Overlay0: Line numbers color
-line_numbers: "#6c7086"
-# Blue: Active line number color
-line_numbers_active: "#89b4fa"
+line_numbers: "#6C7086"
+line_numbers_active: "#89B4FA"
 
-# 📊 Status Bar Colors
-# Surface0: Status bar background color
+# 📊 Status Bar
 status_bar_bg: "#313244"
-# Text: Status bar foreground text color
-status_bar_fg: "#cdd6f4"
-# Sky: Active status bar element color
-status_bar_active: "#89dceb"
+status_bar_fg: "#CDD6F4"
+status_bar_active: "#89DCEB"
 
-# ✨ Syntax Highlighting Tones
-# Mauve: Keywords (e.g., 'if', 'for', 'class')
-keyword: "#cba6f7"
-# Green: String literals (text within quotes)
-string_literal: "#a6e3a1"
-# Teal: Numbers
-number: "#94e2d5"
-# Overlay1: Comments (non-executable explanatory text)
-comment: "#7f849c"
-# Pink: Function and method names
-function_name: "#f5c2e7"
-# Text: Variables
-variable: "#cdd6f4"
-# Yellow: Type definitions (e.g., 'int', 'string', custom classes)
-type: "#f9e2af"
-# Maroon: Operators (e.g., '+', '=', '>')
-operator_color: "#eba0ac"
-# Mauve: Preprocessor directives (e.g., '#include')
-preprocessor: "#cba6f7"
+# ✨ Semantic categories
+keyword: "#CBA6F7"
+string_literal: "#A6E3A1"
+number: "#94E2D5"
+comment: "#7F849C"
+function_name: "#F5C2E7"
+variable: "#CDD6F4"
+type: "#F9E2AF"
+operator: "#EBA0AC"
+punctuation: "#CDD6F4"
+constant: "#F9E2AF"
+namespace: "#89DCEB"
+property: "#CDD6F4"
+decorator: "#F5C2E7"
+macro: "#CBA6F7"
+label: "#CBA6F7"
 
-# 🐍 Language Specific Tints
-# Pink: Python decorators
-python_decorator: "#f5c2e7"
-# Mauve: Python built-in functions
-python_builtin: "#cba6f7"
-# Sky: C++ namespaces
-cpp_namespace: "#89dceb"
-
-# 📝 Markdown Formatting Hues
-# Mauve: Headings
-markdown_heading: "#cba6f7"
-# Yellow: Bold text
-markdown_bold: "#f9e2af"
-# Green: Italic text
-markdown_italic: "#a6e3a1"
-# Teal: Inline code blocks
-markdown_code: "#94e2d5"
-# Pink: Hyperlinks
-markdown_link: "#f5c2e7"
-# Overlay1: Blockquotes
-markdown_quote: "#7f849c"
+# 📝 Markup
+markup_heading: "#CBA6F7"
+markup_bold: "#F9E2AF"
+markup_italic: "#A6E3A1"
+markup_code: "#94E2D5"
+markup_code_block: "#94E2D5"
+markup_link: "#F5C2E7"
+markup_url: "#F5C2E7"
+markup_list: "#A6E3A1"
+markup_blockquote: "#7F849C"
+markup_strikethrough: "#EBA0AC"
+markup_quote: "#7F849C"

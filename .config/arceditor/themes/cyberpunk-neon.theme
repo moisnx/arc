@@ -1,40 +1,45 @@
-# Cyberpunk Neon theme for terminal editor
 name: "Cyberpunk Neon"
 
-# UI Colors
+# 💻 UI Colors
 background: "#000000"
-foreground: "#e0e0e0"
-cursor: "#00ffff"
-selection: "#1a1a1a"
+foreground: "#E0E0E0"
+cursor: "#00FFFF"
+selection: "#1A1A1A"
 line_highlight: "#111111"
 line_numbers: "#555555"
-line_numbers_active: "#ff00ff"
+line_numbers_active: "#FF00FF"
 
-# Status Bar
+# 📊 Status Bar
 status_bar_bg: "#111111"
-status_bar_fg: "#e0e0e0"
-status_bar_active: "#00ffff"
+status_bar_fg: "#E0E0E0"
+status_bar_active: "#00FFFF"
 
-# Syntax Highlighting
-keyword: "#ff00ff"        # Neon Pink
-string_literal: "#39ff14" # Neon Green
-number: "#00ffff"         # Cyan
-comment: "#808080"        # Gray for balance
-function_name: "#ff6ec7"  # Hot Pink
-variable: "#e0e0e0"       # Neutral
-type: "#ffcc00"           # Neon Yellow
-operator_color: "#ff00ff" # Pink operators
-preprocessor: "#ff00ff"   # Pink preprocessor
+# ✨ Semantic categories
+keyword: "#FF00FF"
+string_literal: "#39FF14"
+number: "#00FFFF"
+comment: "#808080"
+function_name: "#FF6EC7"
+variable: "#E0E0E0"
+type: "#FFCC00"
+operator: "#FF00FF"
+punctuation: "#E0E0E0"
+constant: "#FFCC00"
+namespace: "#00FFFF"
+property: "#E0E0E0"
+decorator: "#FF6EC7"
+macro: "#FF00FF"
+label: "#FF00FF"
 
-# Language Specific
-python_decorator: "#ff6ec7"
-python_builtin: "#ff00ff"
-cpp_namespace: "#00ffff"
-
-# Markdown
-markdown_heading: "#ff00ff"
-markdown_bold: "#ffcc00"
-markdown_italic: "#39ff14"
-markdown_code: "#00ffff"
-markdown_link: "#ff6ec7"
-markdown_quote: "#808080"
+# 📝 Markup
+markup_heading: "#FF00FF"
+markup_bold: "#FFCC00"
+markup_italic: "#39FF14"
+markup_code: "#00FFFF"
+markup_code_block: "#00FFFF"
+markup_link: "#FF6EC7"
+markup_url: "#00FFFF"
+markup_list: "#39FF14"
+markup_blockquote: "#808080"
+markup_strikethrough: "#FF00FF"
+markup_quote: "#808080"

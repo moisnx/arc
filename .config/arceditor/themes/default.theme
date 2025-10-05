@@ -1,5 +1,5 @@
 name: "default"
-background: "#0D1117"
+background: "transparent"
 foreground: "#C9D1D9"
 cursor: "#FFFFFF"
 selection: "#264F78"

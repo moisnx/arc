@@ -1,7 +1,6 @@
 #ifndef LLVM_CLANG_SEMA_SEMA_H
 
 #define LLVM_CLANG_SEMA_SEMA_H
-#include <string.h>
 #include "clang/APINotes/APINotesManager.h"
 #include "clang/AST/ASTFwd.h"
 #include "clang/AST/ASTLambda.h"
