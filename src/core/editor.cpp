@@ -144,16 +144,6 @@ void Editor::positionCursor()
 
   int screenRow = cursorLine - viewportTop;
 
-#ifdef _WIN32
-  static int debug_counter = 0;
-  if (debug_counter++ % 100 == 0)
-  {
-    int y, x;
-    getyx(stdscr, y, x);
-    std::cerr << "Cursor at: " << y << "," << x << std::endl;
-  }
-#endif
-
   // Add bounds checking
   if (screenRow < 0 || screenRow >= viewportHeight || screenRow >= rows - 1)
     return;
@@ -164,20 +154,14 @@ void Editor::positionCursor()
   int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
   int screenCol = contentStartCol + cursorCol - viewportLeft;
 
-  // CRITICAL: Clamp screenCol to valid range
+  // Clamp screenCol to valid range
   if (screenCol < contentStartCol)
     screenCol = contentStartCol;
   if (screenCol >= cols)
     screenCol = cols - 1;
 
-  // CRITICAL: Cache current position to avoid redundant moves
-  static int lastRow = -1, lastCol = -1;
-  if (lastRow != screenRow || lastCol != screenCol)
-  {
-    move(screenRow, screenCol);
-    lastRow = screenRow;
-    lastCol = screenCol;
-  }
+  // Just move directly - let PDCurses/ncurses optimize
+  move(screenRow, screenCol);
 }
 
 bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
@@ -458,9 +442,6 @@ void Editor::display()
   }
 
   drawStatusBar();
-#ifdef _WIN32
-  refresh();
-#endif
   positionCursor();
 }
 // Also fix the drawStatusBar function
