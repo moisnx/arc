@@ -6,6 +6,17 @@
 #include <iostream>
 #ifdef _WIN32
 #include <curses.h>
+inline int setenv(const char *name, const char *value, int overwrite)
+{
+  if (!overwrite)
+  {
+    size_t envsize = 0;
+    getenv_s(&envsize, nullptr, 0, name);
+    if (envsize != 0)
+      return 0; // Variable exists, don't overwrite
+  }
+  return _putenv_s(name, value);
+}
 #else
 #include <ncurses.h>
 #endif
