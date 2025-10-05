@@ -143,22 +143,30 @@ void Editor::positionCursor()
   getmaxyx(stdscr, rows, cols);
 
   int screenRow = cursorLine - viewportTop;
-  if (screenRow >= 0 && screenRow < viewportHeight)
-  {
-    bool show_line_numbers = ConfigManager::getLineNumbers();
-    int lineNumWidth =
-        show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
-    int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
-    int screenCol = contentStartCol + cursorCol - viewportLeft;
 
-    if (screenCol >= contentStartCol && screenCol < cols)
-    {
-      move(screenRow, screenCol);
-    }
-    else
-    {
-      move(screenRow, contentStartCol);
-    }
+  // Add bounds checking
+  if (screenRow < 0 || screenRow >= viewportHeight || screenRow >= rows - 1)
+    return;
+
+  bool show_line_numbers = ConfigManager::getLineNumbers();
+  int lineNumWidth =
+      show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+  int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
+  int screenCol = contentStartCol + cursorCol - viewportLeft;
+
+  // CRITICAL: Clamp screenCol to valid range
+  if (screenCol < contentStartCol)
+    screenCol = contentStartCol;
+  if (screenCol >= cols)
+    screenCol = cols - 1;
+
+  // CRITICAL: Cache current position to avoid redundant moves
+  static int lastRow = -1, lastCol = -1;
+  if (lastRow != screenRow || lastCol != screenCol)
+  {
+    move(screenRow, screenCol);
+    lastRow = screenRow;
+    lastCol = screenCol;
   }
 }
 
@@ -440,6 +448,9 @@ void Editor::display()
   }
 
   drawStatusBar();
+#ifdef _WIN32
+  refresh();
+#endif
   positionCursor();
 }
 // Also fix the drawStatusBar function
