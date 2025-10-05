@@ -63,3 +63,9 @@ languages:
     builtin: true
     parser_name: "zig"
     queries: ["treesitter/queries/zig/highlights.scm"]
+
+  go:
+    name: "Go"
+    extensions: ["go"]
+    parser_name: "go"
+    queries: ["treesitter/queries/go/highlights.scm"]

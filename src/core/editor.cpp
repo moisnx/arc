@@ -238,7 +238,6 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
-// Replace your current display() function in editor.cpp
 void Editor::display()
 {
   if (!validateEditorState())
