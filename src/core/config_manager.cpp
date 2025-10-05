@@ -165,7 +165,7 @@ bool ConfigManager::ensureConfigStructure()
 
     // Create subdirectories
     std::string themes_dir = config_dir + "/themes";
-    std::string syntax_dir = config_dir + "/syntax_rules";
+    // std::string syntax_dir = config_dir + "/syntax_rules";
 
     if (!fs::exists(themes_dir))
     {
@@ -173,12 +173,12 @@ bool ConfigManager::ensureConfigStructure()
       std::cerr << "Created themes directory: " << themes_dir << std::endl;
     }
 
-    if (!fs::exists(syntax_dir))
-    {
-      fs::create_directories(syntax_dir);
-      std::cerr << "Created syntax_rules directory: " << syntax_dir
-                << std::endl;
-    }
+    // if (!fs::exists(syntax_dir))
+    // {
+    //   fs::create_directories(syntax_dir);
+    //   std::cerr << "Created syntax_rules directory: " << syntax_dir
+    //             << std::endl;
+    // }
 
     // Create default config file if it doesn't exist
     std::string config_file = getConfigFile();

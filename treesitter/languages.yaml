@@ -55,8 +55,7 @@ languages:
     extensions: ["ts", "tsx"]
     builtin: true
     parser_name: "tsx"
-    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm",  "treesitter/queries/_jsx/highlights.scm"]
-
+    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm", "treesitter/queries/_jsx/highlights.scm"]
   zig:
     name: "Zig"
     extensions: ["zig","zir", "zigr", "zon"]

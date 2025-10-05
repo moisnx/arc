@@ -1,5 +1,0 @@
-language_info:
-  name: "C++"
-  extensions: ["cpp", "h", "hpp", "c", "cc", "cxx", "c++"]
-  parser_name: "cpp"
-  query_file_path: "syntax_rules/cpp.scm"
