@@ -28,3 +28,6 @@
 [submodule "deps/tree-sitter-typescript"]
 	path = deps/tree-sitter-typescript
 	url = https://github.com/tree-sitter/tree-sitter-typescript
+[submodule "deps/tree-sitter-zig"]
+	path = deps/tree-sitter-zig
+	url = https://github.com/GrayJack/tree-sitter-zig
