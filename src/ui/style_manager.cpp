@@ -425,8 +425,8 @@ void StyleManager::apply_theme()
 {
   if (!initialized)
   {
-    std::cerr << "StyleManager not initialized, cannot apply theme"
-              << std::endl;
+    // std::cerr << "StyleManager not initialized, cannot apply theme"
+    //           << std::endl;
     return;
   }
 
