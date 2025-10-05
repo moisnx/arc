@@ -1,0 +1,148 @@
+## Template File (.gitmessage)
+
+```
+# <type>: <subject> (max 50 chars)
+
+# Body (wrap at 72 chars)
+
+# Footer (optional)
+
+# --- COMMIT END ---
+# Type can be:
+#   feat     : New feature
+#   fix      : Bug fix
+#   refactor : Code change that neither fixes a bug nor adds a feature
+#   style    : Changes that don't affect code meaning (formatting, etc)
+#   perf     : Performance improvement
+#   test     : Adding or updating tests
+#   docs     : Documentation only changes
+#   build    : Changes to build system or dependencies
+#   ci       : Changes to CI configuration
+#   chore    : Other changes (updating grunt tasks, etc)
+#   revert   : Revert a previous commit
+#   wip      : Work in progress (squash these before merging!)
+#
+# Subject line:
+#   - Use imperative mood ("add feature" not "added feature")
+#   - Don't capitalize first letter
+#   - No period at the end
+#
+# Body:
+#   - Explain WHAT and WHY (not HOW)
+#   - Separate from subject with blank line
+#   - Wrap at 72 characters
+#
+# Footer:
+#   - Reference issues: "Fixes #123"
+#   - Breaking changes: "BREAKING CHANGE: description"
+```
+
+## Example Commits
+
+### Feature Addition
+
+```
+feat: add Windows MSVC build support
+
+- Fix CMake parser discovery for Windows drive letter paths
+- Add platform-specific curses header includes
+- Implement Windows-compatible setenv wrapper
+- Force static runtime linking across all libraries
+
+Tested on Windows 10 with MSVC 2019 and vcpkg static libraries.
+
+Fixes #42
+```
+
+### Bug Fix
+
+```
+fix: resolve cursor positioning in PDCurses
+
+Update renderer to use PDCurses-specific refresh sequences.
+Prevents cursor from jumping during scroll operations on Windows.
+
+Fixes #123
+```
+
+### Refactoring
+
+```
+refactor: simplify parser auto-discovery logic
+
+Replace colon-separated string parsing with CMake lists to avoid
+issues with Windows drive letters (C:, D:, etc).
+
+No functional changes.
+```
+
+### Documentation
+
+```
+docs: add comprehensive build instructions
+
+Create BUILD.md with platform-specific setup guides for Linux,
+macOS, and Windows. Include troubleshooting section and vcpkg
+integration details.
+```
+
+### Work in Progress (Squash Later!)
+
+```
+wip: experimenting with PDCurses rendering
+```
+
+## Quick Conventional Commit Examples
+
+```bash
+# New feature
+git commit -m "feat: add syntax highlighting for Rust"
+
+# Bug fix
+git commit -m "fix: prevent crash on empty file"
+
+# Documentation
+git commit -m "docs: update README with installation steps"
+
+# Refactoring
+git commit -m "refactor: extract rendering logic to separate class"
+
+# Performance
+git commit -m "perf: optimize buffer gap operations"
+
+# Build/tooling
+git commit -m "build: update CMake minimum version to 3.16"
+
+# Style (formatting, no code change)
+git commit -m "style: format code with clang-format"
+
+# Revert
+git commit -m "revert: undo experimental PDCurses changes"
+```
+
+## Squashing WIP Commits
+
+```bash
+# After many "wip:" commits, squash them:
+git reset --soft HEAD~5  # Last 5 commits
+git commit -m "feat: complete Windows build support
+
+- Fix all platform-specific compilation issues
+- Add static library linking
+- Implement compatibility wrappers
+
+Closes #42"
+```
+
+## Multi-line Commits from CLI
+
+```bash
+git commit -m "feat: add Tree-sitter integration" -m "
+- Implement language registry auto-discovery
+- Add syntax highlighting with Tree-sitter API
+- Support Python, C, C++, Rust, JavaScript, TypeScript
+
+This enables superior syntax highlighting compared to
+the regex-based fallback system.
+"
+```
