@@ -7,7 +7,12 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#ifdef _WIN32
+#include <curses.h>
+#else
 #include <ncurses.h>
+#endif
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <utility>

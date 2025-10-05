@@ -4,7 +4,22 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#ifdef _WIN32
+#include <curses.h>
+inline int setenv(const char *name, const char *value, int overwrite)
+{
+  if (!overwrite)
+  {
+    size_t envsize = 0;
+    getenv_s(&envsize, nullptr, 0, name);
+    if (envsize != 0)
+      return 0; // Variable exists, don't overwrite
+  }
+  return _putenv_s(name, value);
+}
+#else
 #include <ncurses.h>
+#endif
 #include <sstream>
 
 StyleManager::StyleManager()
@@ -56,13 +71,13 @@ void StyleManager::initialize()
   next_custom_color_id = 16; // Start custom colors at ID 16
   color_cache.clear();
 
-  std::cerr << "=== UNIFIED THEME SYSTEM WITH HEX SUPPORT ===" << std::endl;
-  std::cerr << "COLORS: " << COLORS << std::endl;
-  std::cerr << "COLOR_PAIRS: " << COLOR_PAIRS << std::endl;
-  std::cerr << "256-color support: "
-            << (supports_256_colors_cache ? "YES" : "NO") << std::endl;
-  std::cerr << "TERM: " << (getenv("TERM") ? getenv("TERM") : "not set")
-            << std::endl;
+  // std::cerr << "=== UNIFIED THEME SYSTEM WITH HEX SUPPORT ===" << std::endl;
+  // std::cerr << "COLORS: " << COLORS << std::endl;
+  // std::cerr << "COLOR_PAIRS: " << COLOR_PAIRS << std::endl;
+  // std::cerr << "256-color support: "
+  //           << (supports_256_colors_cache ? "YES" : "NO") << std::endl;
+  // std::cerr << "TERM: " << (getenv("TERM") ? getenv("TERM") : "not set")
+  //           << std::endl;
 
   // Check for WSL-specific issues
   const char *wsl_distro = getenv("WSL_DISTRO_NAME");
@@ -81,7 +96,7 @@ void StyleManager::initialize()
   apply_theme();
 
   initialized = true;
-  std::cerr << "Unified theme system initialized successfully" << std::endl;
+  // std::cerr << "Unified theme system initialized successfully" << std::endl;
 }
 
 short StyleManager::resolve_theme_color(const std::string &config_value)
@@ -127,9 +142,10 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
         color_cache[config_value] = color_id;
         const_cast<StyleManager *>(this)->next_custom_color_id++;
 
-        std::cerr << "Created custom color " << color_id << " for "
-                  << config_value << " (RGB: " << rgb.r << "," << rgb.g << ","
-                  << rgb.b << ")" << std::endl;
+        // std::cerr << "Created custom color " << color_id << " for "
+        //           << config_value << " (RGB: " << rgb.r << "," << rgb.g <<
+        //           ","
+        //           << rgb.b << ")" << std::endl;
         return color_id;
       }
       else
@@ -409,12 +425,12 @@ void StyleManager::apply_theme()
 {
   if (!initialized)
   {
-    std::cerr << "StyleManager not initialized, cannot apply theme"
-              << std::endl;
+    // std::cerr << "StyleManager not initialized, cannot apply theme"
+    //           << std::endl;
     return;
   }
 
-  std::cerr << "Applying theme: " << current_theme.name << std::endl;
+  // std::cerr << "Applying theme: " << current_theme.name << std::endl;
 
   short terminal_bg = resolve_theme_color(current_theme.background);
   short terminal_fg = resolve_theme_color(current_theme.foreground);
