@@ -335,6 +335,7 @@ int main(int argc, char *argv[])
   editor.setMode(EditorMode::INSERT);
   editor.display();
   refresh();
+  curs_set(1); // Ensure cursor is visible
 
   // Handle --quit for testing
   if (quit_immediately)
@@ -365,7 +366,9 @@ int main(int argc, char *argv[])
     if (ConfigManager::isReloadPending())
     {
       editor.display();
-#ifndef _WIN32
+#ifdef _WIN32
+// Remove this block - display() already calls refresh() on Windows
+#else
       refresh();
 #endif
     }
@@ -435,10 +438,15 @@ bool initializeNcurses()
   keypad(stdscr, TRUE);
   noecho();
   curs_set(1);
+
 #ifdef _WIN32
-  timeout(100);                   // Longer timeout on Windows
-  PDC_set_blink(FALSE);           // Disable blinking (PDCurses specific)
-  PDC_return_key_modifiers(TRUE); // Better key handling
+  timeout(100);
+  PDC_set_blink(FALSE);
+  PDC_return_key_modifiers(TRUE);
+  // Add these:
+  PDC_save_key_modifiers(TRUE);
+  scrollok(stdscr, FALSE); // Disable automatic scrolling
+  leaveok(stdscr, FALSE);  // Update cursor position properly
 #else
   timeout(50);
 #endif
