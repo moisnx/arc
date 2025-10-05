@@ -78,30 +78,37 @@ else()
 endif()
 
 # ----------------------------------------------------
-# 2. Language Parsers (Auto-Discovery)
+# 2. Language Parsers (Auto-Discovery) - FIXED FOR WINDOWS
 # ----------------------------------------------------
 
 if(TREE_SITTER_ENABLED)
     message(STATUS "=== Tree-sitter Auto-Discovery ===")
     
-    # Define parsers with their actual paths
-    set(PARSER_CONFIGS
-        "python:${DEPS_DIR}/tree-sitter-python"
-        "c:${DEPS_DIR}/tree-sitter-c"
-        "cpp:${DEPS_DIR}/tree-sitter-cpp"
-        "rust:${DEPS_DIR}/tree-sitter-rust"
-        "markdown:${DEPS_DIR}/tree-sitter-markdown/tree-sitter-markdown"
-        "javascript:${DEPS_DIR}/tree-sitter-javascript"
-        "typescript:${DEPS_DIR}/tree-sitter-typescript/typescript"
+    # Define parsers - use CMake lists instead of colon-separated strings
+    # Format: list of pairs (lang_name, parser_path)
+    set(PARSER_NAMES 
+        "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx"
+    )
+    set(PARSER_PATHS
+        "${DEPS_DIR}/tree-sitter-python"
+        "${DEPS_DIR}/tree-sitter-c"
+        "${DEPS_DIR}/tree-sitter-cpp"
+        "${DEPS_DIR}/tree-sitter-rust"
+        "${DEPS_DIR}/tree-sitter-markdown/tree-sitter-markdown"
+        "${DEPS_DIR}/tree-sitter-javascript"
+        "${DEPS_DIR}/tree-sitter-typescript/typescript"
+        "${DEPS_DIR}/tree-sitter-typescript/tsx"
     )
     
     set(DISCOVERED_PARSERS "")
     
-    foreach(parser_config ${PARSER_CONFIGS})
-        # Split the config: "name:path"
-        string(REPLACE ":" ";" config_parts ${parser_config})
-        list(GET config_parts 0 lang_name)
-        list(GET config_parts 1 parser_dir)
+    # Iterate using indices
+    list(LENGTH PARSER_NAMES parser_count)
+    math(EXPR parser_count "${parser_count} - 1")
+    
+    foreach(i RANGE ${parser_count})
+        list(GET PARSER_NAMES ${i} lang_name)
+        list(GET PARSER_PATHS ${i} parser_dir)
         
         if(NOT EXISTS ${parser_dir})
             message(STATUS "  ✗ Skipping ${lang_name}: directory not found at ${parser_dir}")
@@ -232,10 +239,6 @@ list(APPEND EFSW_SOURCES
     ${EFSW_BASE_DIR}/src/efsw/System.cpp
     ${EFSW_BASE_DIR}/src/efsw/Watcher.cpp
     
-    # Platform-independent (Posix) FileSystem and System implementations
-    ${EFSW_BASE_DIR}/src/efsw/platform/posix/FileSystemImpl.cpp
-    ${EFSW_BASE_DIR}/src/efsw/platform/posix/SystemImpl.cpp
-    
     # CRITICAL FIX: Add Generic implementation for default constructors
     ${EFSW_BASE_DIR}/src/efsw/FileWatcherGeneric.cpp
     ${EFSW_BASE_DIR}/src/efsw/WatcherGeneric.cpp
@@ -246,11 +249,15 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     list(APPEND EFSW_SOURCES 
         ${EFSW_BASE_DIR}/src/efsw/FileWatcherInotify.cpp
         ${EFSW_BASE_DIR}/src/efsw/WatcherInotify.cpp
+        ${EFSW_BASE_DIR}/src/efsw/platform/posix/FileSystemImpl.cpp
+        ${EFSW_BASE_DIR}/src/efsw/platform/posix/SystemImpl.cpp
     )
 elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin") # macOS
     list(APPEND EFSW_SOURCES 
         ${EFSW_BASE_DIR}/src/efsw/FileWatcherFSEvents.cpp
         ${EFSW_BASE_DIR}/src/efsw/WatcherFSEvents.cpp
+        ${EFSW_BASE_DIR}/src/efsw/platform/posix/FileSystemImpl.cpp
+        ${EFSW_BASE_DIR}/src/efsw/platform/posix/SystemImpl.cpp
     )
 elseif(WIN32)
     list(APPEND EFSW_SOURCES 

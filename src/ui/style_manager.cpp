@@ -4,7 +4,11 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#ifdef _WIN32
+#include <curses.h>
+#else
 #include <ncurses.h>
+#endif
 #include <sstream>
 
 StyleManager::StyleManager()

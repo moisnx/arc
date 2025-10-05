@@ -45,7 +45,14 @@ languages:
 
   typescript:
     name: "TypeScript"
-    extensions: ["ts", "tsx"]
+    extensions: ["ts"]
     builtin: true
     parser_name: "typescript"
+    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm"]
+  
+  tsx:
+    name: "Tsx"
+    extensions: ["ts", "tsx"]
+    builtin: true
+    parser_name: "tsx"
     queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm",  "treesitter/queries/_jsx/highlights.scm"]
