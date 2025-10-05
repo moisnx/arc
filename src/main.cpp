@@ -363,7 +363,9 @@ int main(int argc, char *argv[])
     if (ConfigManager::isReloadPending())
     {
       editor.display();
+#ifndef _WIN32
       refresh();
+#endif
     }
 
     key = getch();
@@ -386,7 +388,12 @@ int main(int argc, char *argv[])
     case InputHandler::KeyResult::REDRAW:
     case InputHandler::KeyResult::HANDLED:
       editor.display();
+#ifdef _WIN32
+// On Windows, display() already calls refresh()
+// Don't call it again here
+#else
       refresh();
+#endif
       break;
     case InputHandler::KeyResult::NOT_HANDLED:
       break;
@@ -425,7 +432,13 @@ bool initializeNcurses()
   keypad(stdscr, TRUE);
   noecho();
   curs_set(1);
+#ifdef _WIN32
+  timeout(100);                   // Longer timeout on Windows
+  PDC_set_blink(FALSE);           // Disable blinking (PDCurses specific)
+  PDC_return_key_modifiers(TRUE); // Better key handling
+#else
   timeout(50);
+#endif
 
   if (!has_colors())
   {
@@ -479,12 +492,16 @@ bool initializeThemes()
 void setupMouse()
 {
   mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
+#ifndef _WIN32
   printf("\033[?1003h");
   fflush(stdout);
+#endif
 }
 
 void cleanupMouse()
 {
+#ifndef _WIN32
   printf("\033[?1003l");
   fflush(stdout);
+#endif
 }
