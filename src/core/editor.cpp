@@ -144,6 +144,16 @@ void Editor::positionCursor()
 
   int screenRow = cursorLine - viewportTop;
 
+#ifdef _WIN32
+  static int debug_counter = 0;
+  if (debug_counter++ % 100 == 0)
+  {
+    int y, x;
+    getyx(stdscr, y, x);
+    std::cerr << "Cursor at: " << y << "," << x << std::endl;
+  }
+#endif
+
   // Add bounds checking
   if (screenRow < 0 || screenRow >= viewportHeight || screenRow >= rows - 1)
     return;
