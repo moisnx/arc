@@ -121,11 +121,23 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
     // Parse the hex color
     RGB rgb = parse_hex_color(config_value);
 #ifdef _WIN32
-    // CRITICAL FIX: On Windows, NEVER call init_color() during runtime
-    // Just use closest 8-color match
-    short closest = find_closest_8color(rgb);
-    color_cache[config_value] = closest; // Cache it
-    return closest;
+    // On Windows: Map to closest 256-color palette entry WITHOUT init_color()
+    if (COLORS >= 256)
+    {
+      // Use the standard 256-color palette (colors 16-255)
+      // Don't create custom colors, just find the closest existing one
+      short closest = find_closest_256color(rgb);
+      color_cache[config_value] = closest;
+      return closest;
+    }
+    else
+    {
+      // Fallback to 8-color
+      short closest = find_closest_8color(rgb);
+      color_cache[config_value] = closest;
+      return closest;
+    }
+
 #else
     if (supports_256_colors_cache && next_custom_color_id < COLORS)
     {
@@ -249,6 +261,33 @@ short StyleManager::find_closest_8color(const RGB &rgb) const
   }
 
   return closest_color;
+}
+
+short StyleManager::find_closest_256color(const RGB &rgb) const
+{
+  // Standard 256-color palette structure:
+  // 0-15: System colors (leave these alone)
+  // 16-231: 6x6x6 color cube (216 colors)
+  // 232-255: Grayscale ramp (24 shades)
+
+  // For grayscale, use the grayscale ramp
+  if (abs(rgb.r - rgb.g) < 10 && abs(rgb.g - rgb.b) < 10 &&
+      abs(rgb.r - rgb.b) < 10)
+  {
+    // It's grayscale - map to 232-255
+    int gray_value = (rgb.r + rgb.g + rgb.b) / 3;
+    int gray_index = (gray_value * 23) / 255; // 0-23 range
+    return 232 + gray_index;
+  }
+
+  // For colors, use the 6x6x6 cube (16-231)
+  // Map RGB (0-255) to 6-level cube (0-5)
+  int r_index = (rgb.r * 5) / 255;
+  int g_index = (rgb.g * 5) / 255;
+  int b_index = (rgb.b * 5) / 255;
+
+  // Calculate color index: 16 + 36*R + 6*G + B
+  return 16 + (36 * r_index) + (6 * g_index) + b_index;
 }
 
 // Legacy function - kept only for load_default_theme compatibility
