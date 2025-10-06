@@ -221,6 +221,7 @@ private:
   // Hex parsing utilities
   RGB parse_hex_color(const std::string &hex_str) const;
   short find_closest_8color(const RGB &rgb) const;
+  short find_closest_256color(const RGB &rgb) const;
 
   std::string trim(const std::string &str);
   std::string remove_quotes(const std::string &str);
