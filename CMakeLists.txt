@@ -346,13 +346,13 @@ endif()
 if(WIN32)
     set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
     
-    find_package(unofficial-pdcurses CONFIG REQUIRED)
+    find_package(pdcursesmod  CONFIG REQUIRED)
     
-    if(TARGET unofficial::pdcurses::pdcurses_static)
-        set(CURSES_LIBRARIES unofficial::pdcurses::pdcurses_static)
-    else()
-        set(CURSES_LIBRARIES unofficial::pdcurses::pdcurses)
-    endif()
+    set_target_properties(pdcursesmod PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/deps/PDCursesMod/wincon/pdcurses.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/deps/PDCursesMod"
+)
+set(CURSES_LIBRARIES pdcursesmod)
     
 elseif(ANDROID)
     find_package(PkgConfig REQUIRED)
