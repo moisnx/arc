@@ -622,7 +622,9 @@ void Editor::handleResize()
   }
   clear();
   display();
-  refresh();
+
+  wnoutrefresh(stdscr); // Mark stdscr as ready
+  doupdate();           // Execute the single, clean flush
 }
 
 void Editor::handleMouse(MEVENT &event)
