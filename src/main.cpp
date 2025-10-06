@@ -395,6 +395,7 @@ int main(int argc, char *argv[])
     case InputHandler::KeyResult::REDRAW:
     case InputHandler::KeyResult::HANDLED:
       curs_set(0); // Hide during render
+      curs_set(0); // Hide during render
       editor.display();
       wnoutrefresh(stdscr);
       doupdate();
