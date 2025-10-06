@@ -444,6 +444,7 @@ void Editor::display()
   // REMOVED: positionCursor() call
   // Cursor positioning now happens AFTER doupdate() in main loop
 }
+
 // Also fix the drawStatusBar function
 void Editor::drawStatusBar()
 {
