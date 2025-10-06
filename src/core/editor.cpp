@@ -144,6 +144,16 @@ void Editor::positionCursor()
 
   int screenRow = cursorLine - viewportTop;
 
+#ifdef _WIN32
+  static int debug_counter = 0;
+  if (debug_counter++ % 100 == 0)
+  {
+    int y, x;
+    getyx(stdscr, y, x);
+    std::cerr << "Cursor at: " << y << "," << x << std::endl;
+  }
+#endif
+
   // Add bounds checking
   if (screenRow < 0 || screenRow >= viewportHeight || screenRow >= rows - 1)
     return;
@@ -154,14 +164,20 @@ void Editor::positionCursor()
   int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
   int screenCol = contentStartCol + cursorCol - viewportLeft;
 
-  // Clamp screenCol to valid range
+  // CRITICAL: Clamp screenCol to valid range
   if (screenCol < contentStartCol)
     screenCol = contentStartCol;
   if (screenCol >= cols)
     screenCol = cols - 1;
 
-  // Just move directly - let PDCurses/ncurses optimize
-  move(screenRow, screenCol);
+  // CRITICAL: Cache current position to avoid redundant moves
+  static int lastRow = -1, lastCol = -1;
+  if (lastRow != screenRow || lastCol != screenCol)
+  {
+    move(screenRow, screenCol);
+    lastRow = screenRow;
+    lastCol = screenCol;
+  }
 }
 
 bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
@@ -341,7 +357,6 @@ void Editor::display()
     // OPTIMIZATION 4: Track current span index (avoid O(n) per character)
     int current_span_idx = 0;
     int num_spans = currentLineSpans.size();
-    static chtype current_attrs = A_NORMAL;
 
     // Content rendering
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
@@ -377,7 +392,7 @@ void Editor::display()
           isSelected = true; // Middle line, fully selected
         }
       }
-      chtype needed_attrs;
+
       if (isSelected)
       {
         attron(COLOR_PAIR(14) | A_REVERSE);
@@ -443,18 +458,6 @@ void Editor::display()
   }
 
   drawStatusBar();
-  attrset(A_NORMAL);  // Reset to default state
-  attroff(A_REVERSE); // Explicitly clear reverse video
-  attroff(A_BOLD);    // Explicitly clear bold
-  // Clear ALL color pairs
-  for (int i = 0; i < 20; i++)
-  {
-    attroff(COLOR_PAIR(i));
-  }
-
-#ifdef _WIN32
-  refresh();
-#endif
   positionCursor();
 }
 // Also fix the drawStatusBar function
@@ -467,9 +470,8 @@ void Editor::drawStatusBar()
   move(statusRow, 0);
 
   // CRITICAL: Set status bar background before clearing
-  chtype status_bg = COLOR_PAIR(STATUS_BAR);
-  wbkgdset(stdscr, status_bg | ' '); // Set background character
-  clrtoeol();                        // This now uses the background we just set
+  attrset(COLOR_PAIR(STATUS_BAR));
+  clrtoeol(); // Clear entire line with status bar background
 
   move(statusRow, 0);
 
@@ -493,9 +495,9 @@ void Editor::drawStatusBar()
     break;
   }
 
-  wattron(stdscr, COLOR_PAIR(modeColor) | A_BOLD);
+  attron(COLOR_PAIR(modeColor) | A_BOLD);
   printw("%s", modeStr.c_str());
-  wattroff(stdscr, COLOR_PAIR(modeColor) | A_BOLD);
+  attroff(COLOR_PAIR(modeColor) | A_BOLD);
 
   attron(COLOR_PAIR(STATUS_BAR));
   printw(" ");
@@ -620,7 +622,6 @@ void Editor::drawStatusBar()
     attroff(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
     attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
   }
-  wbkgdset(stdscr, COLOR_PAIR(0) | ' ');
 }
 
 void Editor::handleResize()
@@ -1811,15 +1812,4 @@ void Editor::initializeViewportHighlighting()
     // Pre-parse viewport so first display() is instant
     syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
   }
-}
-
-void Editor::forceCursorSync()
-{
-#ifdef _WIN32
-  // Force PDCurses to resync with Windows Console
-  int y, x;
-  getyx(stdscr, y, x);
-  move(y, x); // Re-move to same position forces sync
-  refresh();
-#endif
 }

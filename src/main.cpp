@@ -373,9 +373,6 @@ int main(int argc, char *argv[])
 #endif
     }
 
-#ifdef _WIN32
-    editor.forceCursorSync(); // ADD THIS
-#endif
     key = getch();
 
     if (key == 'q' || key == 'Q')
@@ -446,17 +443,10 @@ bool initializeNcurses()
   timeout(100);
   PDC_set_blink(FALSE);
   PDC_return_key_modifiers(TRUE);
-
-  // CRITICAL FOR CURSOR STABILITY:
+  // Add these:
   PDC_save_key_modifiers(TRUE);
-  scrollok(stdscr, FALSE);
-  leaveok(stdscr, FALSE);
-
-  // Force immediate cursor updates (reduces buffering issues)
-  immedok(stdscr, TRUE);
-
-  // Disable automatic cursor shape changes
-  curs_set(1);
+  scrollok(stdscr, FALSE); // Disable automatic scrolling
+  leaveok(stdscr, FALSE);  // Update cursor position properly
 #else
   timeout(50);
 #endif
