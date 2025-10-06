@@ -112,6 +112,7 @@ public:
   };
   void reloadConfig();
   void initializeViewportHighlighting();
+  void positionCursor();
 
 private:
   // Core Data
@@ -162,7 +163,6 @@ private:
   std::string expandTabs(const std::string &line, int tabSize = 4);
   std::string getFileExtension();
   bool isPositionSelected(int line, int col);
-  void positionCursor();
   bool mouseToFilePos(int mouseRow, int mouseCol, int &fileRow, int &fileCol);
   void updateCursorAndViewport(int newLine, int newCol);
 
