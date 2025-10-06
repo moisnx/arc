@@ -540,6 +540,34 @@ void StyleManager::apply_theme()
   // refresh();
 }
 
+// Add to style_manager.cpp
+short StyleManager::find_closest_256color(const RGB &rgb) const
+{
+  // Standard 256-color palette structure:
+  // 0-15: System colors (leave these alone)
+  // 16-231: 6x6x6 color cube (216 colors)
+  // 232-255: Grayscale ramp (24 shades)
+
+  // For grayscale, use the grayscale ramp
+  if (abs(rgb.r - rgb.g) < 10 && abs(rgb.g - rgb.b) < 10 &&
+      abs(rgb.r - rgb.b) < 10)
+  {
+    // It's grayscale - map to 232-255
+    int gray_value = (rgb.r + rgb.g + rgb.b) / 3;
+    int gray_index = (gray_value * 23) / 255; // 0-23 range
+    return 232 + gray_index;
+  }
+
+  // For colors, use the 6x6x6 cube (16-231)
+  // Map RGB (0-255) to 6-level cube (0-5)
+  int r_index = (rgb.r * 5) / 255;
+  int g_index = (rgb.g * 5) / 255;
+  int b_index = (rgb.b * 5) / 255;
+
+  // Calculate color index: 16 + 36*R + 6*G + B
+  return 16 + (36 * r_index) + (6 * g_index) + b_index;
+}
+
 // Also add this helper function to detect and optimize for WSL
 bool StyleManager::is_wsl_environment() const
 {
