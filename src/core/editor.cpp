@@ -43,22 +43,6 @@ void Editor::reloadConfig()
 // Mode Management
 // =================================================================
 
-void Editor::setMode(EditorMode newMode)
-{
-  if (currentMode != newMode)
-  {
-    // Only save state for INSERT mode if we're not in the middle of a save
-    // operation
-    if (newMode == EditorMode::INSERT && currentMode == EditorMode::NORMAL &&
-        !isSaving)
-    {
-      saveState();
-    }
-    currentMode = newMode;
-    updateCursorStyle();
-  }
-}
-
 // =================================================================
 // Private Helper Methods (from original code)
 // =================================================================
@@ -154,19 +138,13 @@ void Editor::positionCursor()
     if (screenCol >= contentStartCol && screenCol < cols)
     {
       move(screenRow, screenCol);
-#ifdef _WIN32
-      // Force cursor update on Windows
-      refresh();
-#endif
     }
     else
     {
       move(screenRow, contentStartCol);
-#ifdef _WIN32
-      refresh();
-#endif
     }
   }
+  // REMOVED: All #ifdef _WIN32 refresh() calls
 }
 
 bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
@@ -453,40 +431,13 @@ void Editor::drawStatusBar()
   int statusRow = rows - 1;
 
   move(statusRow, 0);
-
-  // CRITICAL: Set status bar background before clearing
   attrset(COLOR_PAIR(STATUS_BAR));
-  clrtoeol(); // Clear entire line with status bar background
+  clrtoeol();
 
   move(statusRow, 0);
-
-  // Show current mode
-  std::string modeStr;
-  int modeColor;
-
-  switch (currentMode)
-  {
-  case EditorMode::NORMAL:
-    modeStr = " NORMAL ";
-    modeColor = STATUS_BAR;
-    break;
-  case EditorMode::INSERT:
-    modeStr = " INSERT ";
-    modeColor = STATUS_BAR_ACTIVE;
-    break;
-  case EditorMode::VISUAL:
-    modeStr = " VISUAL ";
-    modeColor = STATUS_BAR_ACTIVE;
-    break;
-  }
-
-  attron(COLOR_PAIR(modeColor) | A_BOLD);
-  printw("%s", modeStr.c_str());
-  attroff(COLOR_PAIR(modeColor) | A_BOLD);
-
   attron(COLOR_PAIR(STATUS_BAR));
-  printw(" ");
 
+  // Show filename
   attron(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
   if (filename.empty())
   {
@@ -510,6 +461,7 @@ void Editor::drawStatusBar()
     attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
   }
 
+  // Show file extension
   std::string ext = getFileExtension();
   if (!ext.empty())
   {
@@ -520,15 +472,11 @@ void Editor::drawStatusBar()
 
   // Right section with position info
   char rightSection[256];
-  if (hasSelection || currentMode == EditorMode::VISUAL)
+  if (hasSelection)
   {
-    int startL = selectionStartLine, startC = selectionStartCol;
-    int endL = selectionEndLine, endC = selectionEndCol;
-    if (startL > endL || (startL == endL && startC > endC))
-    {
-      std::swap(startL, endL);
-      std::swap(startC, endC);
-    }
+    auto [start, end] = getNormalizedSelection();
+    int startL = start.first, startC = start.second;
+    int endL = end.first, endC = end.second;
 
     if (startL == endL)
     {
@@ -570,43 +518,24 @@ void Editor::drawStatusBar()
     rightStart = currentPos + 2;
   }
 
-  // Fill middle space with status bar background
+  // Fill middle space
   attron(COLOR_PAIR(STATUS_BAR));
   for (int i = currentPos; i < rightStart && i < cols; i++)
   {
     move(statusRow, i);
     addch(' ');
   }
-  attroff(COLOR_PAIR(STATUS_BAR));
 
   // Right section
   if (rightStart < cols)
   {
     move(statusRow, rightStart);
-
-    if (hasSelection || currentMode == EditorMode::VISUAL)
-    {
-      attron(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
-    }
-    else
-    {
-      attron(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
-    }
-
-    int remaining = cols - rightStart;
-    if (remaining > 0)
-    {
-      std::string truncated = rightSection;
-      if (static_cast<int>(truncated.length()) > remaining)
-      {
-        truncated = truncated.substr(0, remaining - 3) + "...";
-      }
-      printw("%s", truncated.c_str());
-    }
-
-    attroff(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
+    attron(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
+    printw("%s", rightSection);
     attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
   }
+
+  attroff(COLOR_PAIR(STATUS_BAR));
 }
 
 void Editor::handleResize()
@@ -637,44 +566,44 @@ void Editor::handleMouse(MEVENT &event)
     int fileRow, fileCol;
     if (mouseToFilePos(event.y, event.x, fileRow, fileCol))
     {
-      if (currentMode == EditorMode::VISUAL)
-      {
-        hasSelection = false;
-        isSelecting = true;
-        selectionStartLine = fileRow;
-        selectionStartCol = fileCol;
-        selectionEndLine = fileRow;
-        selectionEndCol = fileCol;
-      }
-      else
-      {
-        clearSelection();
-      }
+      // Start a new selection on mouse press
+      clearSelection();
+      isSelecting = true;
+      selectionStartLine = fileRow;
+      selectionStartCol = fileCol;
+      selectionEndLine = fileRow;
+      selectionEndCol = fileCol;
       updateCursorAndViewport(fileRow, fileCol);
     }
   }
   else if (event.bstate & BUTTON1_RELEASED)
   {
-    if (isSelecting && currentMode == EditorMode::VISUAL)
+    if (isSelecting)
     {
       int fileRow, fileCol;
       if (mouseToFilePos(event.y, event.x, fileRow, fileCol))
       {
         selectionEndLine = fileRow;
         selectionEndCol = fileCol;
+        // Only keep selection if it's not just a click (start != end)
         if (selectionStartLine != selectionEndLine ||
             selectionStartCol != selectionEndCol)
         {
           hasSelection = true;
+        }
+        else
+        {
+          // Just a click, no drag - clear selection
+          clearSelection();
         }
         updateCursorAndViewport(fileRow, fileCol);
       }
       isSelecting = false;
     }
   }
-  else if ((event.bstate & REPORT_MOUSE_POSITION) && isSelecting &&
-           currentMode == EditorMode::VISUAL)
+  else if ((event.bstate & REPORT_MOUSE_POSITION) && isSelecting)
   {
+    // Mouse drag - extend selection
     int fileRow, fileCol;
     if (mouseToFilePos(event.y, event.x, fileRow, fileCol))
     {
@@ -685,22 +614,22 @@ void Editor::handleMouse(MEVENT &event)
   }
   else if (event.bstate & BUTTON1_CLICKED)
   {
+    // Single click - move cursor and clear selection
     int fileRow, fileCol;
     if (mouseToFilePos(event.y, event.x, fileRow, fileCol))
     {
+      clearSelection();
       updateCursorAndViewport(fileRow, fileCol);
-      if (currentMode != EditorMode::VISUAL)
-      {
-        clearSelection();
-      }
     }
   }
   else if (event.bstate & BUTTON4_PRESSED)
   {
+    // Scroll up
     scrollUp();
   }
   else if (event.bstate & BUTTON5_PRESSED)
   {
+    // Scroll down
     scrollDown();
   }
 }
@@ -709,6 +638,10 @@ void Editor::clearSelection()
 {
   hasSelection = false;
   isSelecting = false;
+  selectionStartLine = 0;
+  selectionStartCol = 0;
+  selectionEndLine = 0;
+  selectionEndCol = 0;
 }
 
 void Editor::moveCursorUp()
@@ -733,19 +666,7 @@ void Editor::moveCursorUp()
       }
     }
   }
-
-  // Only clear selection if not in visual mode
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    // Update selection end position
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
-  }
+  // Note: Selection handling now done in InputHandler
 }
 
 void Editor::moveCursorDown()
@@ -770,19 +691,6 @@ void Editor::moveCursorDown()
             std::min(cursorCol, static_cast<int>(expandedLine.length()));
       }
     }
-  }
-
-  // Only clear selection if not in visual mode
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    // Update selection end position
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
   }
 }
 
@@ -822,18 +730,6 @@ void Editor::moveCursorLeft()
       if (viewportLeft < 0)
         viewportLeft = 0;
     }
-  }
-
-  // Only clear selection if not in visual mode
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
   }
 }
 
@@ -881,18 +777,6 @@ void Editor::moveCursorRight()
 
     viewportLeft = 0;
   }
-
-  // Only clear selection if not in visual mode
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
-  }
 }
 
 void Editor::pageUp()
@@ -919,16 +803,8 @@ void Editor::moveCursorToLineStart()
     viewportLeft = 0;
   }
 
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
-  }
+  // Selection handling is done in InputHandler, not here
+  // This method just moves the cursor
 }
 
 void Editor::moveCursorToLineEnd()
@@ -952,16 +828,8 @@ void Editor::moveCursorToLineEnd()
       viewportLeft = 0;
   }
 
-  if (currentMode != EditorMode::VISUAL && (hasSelection || isSelecting))
-  {
-    clearSelection();
-  }
-  else if (currentMode == EditorMode::VISUAL)
-  {
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
-    hasSelection = true;
-  }
+  // Selection handling is done in InputHandler, not here
+  // This method just moves the cursor
 }
 
 void Editor::scrollUp(int linesToScroll)
@@ -1070,7 +938,7 @@ void Editor::debugPrintState(const std::string &context)
   std::cerr << "buffer.getLineCount(): " << buffer.getLineCount() << std::endl;
   std::cerr << "buffer.size(): " << buffer.size() << std::endl;
   std::cerr << "isModified: " << isModified << std::endl;
-  std::cerr << "currentMode: " << (int)currentMode << std::endl;
+  // std::cerr << "currentMode: " << (int)currentMode << std::endl;
 
   if (cursorLine < buffer.getLineCount())
   {
@@ -1702,7 +1570,7 @@ Editor::getNormalizedSelection()
   int endLine = selectionEndLine;
   int endCol = selectionEndCol;
 
-  // Normalize selection (ensure start comes before end)
+  // Always normalize so start < end
   if (startLine > endLine || (startLine == endLine && startCol > endCol))
   {
     std::swap(startLine, endLine);
@@ -1711,7 +1579,6 @@ Editor::getNormalizedSelection()
 
   return {{startLine, startCol}, {endLine, endCol}};
 }
-
 std::string Editor::getSelectedText()
 {
   if (!hasSelection && !isSelecting)
@@ -1760,37 +1627,122 @@ std::string Editor::getSelectedText()
   return result.str();
 }
 
-void Editor::updateCursorStyle()
+// Selection management
+void Editor::startSelectionIfNeeded()
 {
-  switch (currentMode)
+  if (!hasSelection && !isSelecting)
   {
-  case EditorMode::NORMAL:
-    // Block cursor (solid block)
-    printf("\033[2 q");
-    fflush(stdout);
-    break;
-  case EditorMode::INSERT:
-    // Vertical bar cursor (thin lifne like VSCode/modern editors)
-    printf("\033[6 q");
-    fflush(stdout);
-    break;
-  case EditorMode::VISUAL:
-    // Underline cursor for visual mode
-    printf("\033[4 q");
-    fflush(stdout);
-    break;
-  default:
-    printf("\033[6 q");
-    fflush(stdout);
-    break;
+    isSelecting = true;
+    selectionStartLine = cursorLine;
+    selectionStartCol = cursorCol;
+    selectionEndLine = cursorLine;
+    selectionEndCol = cursorCol;
   }
 }
 
-void Editor::restoreDefaultCursor()
+void Editor::updateSelectionEnd()
 {
-  // Restore default cursor (usually blinking block)
-  printf("\033[0 q");
-  fflush(stdout);
+  if (isSelecting || hasSelection)
+  {
+    selectionEndLine = cursorLine;
+    selectionEndCol = cursorCol;
+    hasSelection = true;
+  }
+}
+
+// Clipboard operations
+void Editor::copySelection()
+{
+  if (!hasSelection && !isSelecting)
+    return;
+
+  clipboard = getSelectedText();
+
+  // On Unix, also copy to system clipboard using xclip or xsel
+#ifndef _WIN32
+  FILE *pipe = popen("xclip -selection clipboard 2>/dev/null || xsel "
+                     "--clipboard --input 2>/dev/null",
+                     "w");
+  if (pipe)
+  {
+    fwrite(clipboard.c_str(), 1, clipboard.length(), pipe);
+    pclose(pipe);
+  }
+#endif
+}
+
+void Editor::cutSelection()
+{
+  if (!hasSelection && !isSelecting)
+    return;
+
+  copySelection();
+  deleteSelection();
+}
+
+void Editor::pasteFromClipboard()
+{
+  // First try to get from system clipboard
+#ifndef _WIN32
+  FILE *pipe = popen("xclip -selection clipboard -o 2>/dev/null || xsel "
+                     "--clipboard --output 2>/dev/null",
+                     "r");
+  if (pipe)
+  {
+    char buffer[4096];
+    std::string result;
+    while (fgets(buffer, sizeof(buffer), pipe))
+    {
+      result += buffer;
+    }
+    pclose(pipe);
+
+    if (!result.empty())
+    {
+      clipboard = result;
+    }
+  }
+#endif
+
+  if (clipboard.empty())
+    return;
+
+  // Delete selection if any
+  if (hasSelection || isSelecting)
+  {
+    deleteSelection();
+  }
+
+  // Insert clipboard content
+  saveState();
+
+  for (char ch : clipboard)
+  {
+    if (ch == '\n')
+    {
+      insertNewline();
+    }
+    else
+    {
+      insertChar(ch);
+    }
+  }
+}
+
+void Editor::selectAll()
+{
+  if (buffer.getLineCount() == 0)
+    return;
+
+  selectionStartLine = 0;
+  selectionStartCol = 0;
+
+  selectionEndLine = buffer.getLineCount() - 1;
+  std::string lastLine = buffer.getLine(selectionEndLine);
+  selectionEndCol = static_cast<int>(lastLine.length());
+
+  hasSelection = true;
+  isSelecting = false;
 }
 
 void Editor::initializeViewportHighlighting()

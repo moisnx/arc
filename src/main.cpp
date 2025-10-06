@@ -13,12 +13,14 @@
 #ifdef _WIN32
 #include <curses.h>
 #else
+#include <csignal>
 #include <ncurses.h>
 #include <termios.h>
 #include <unistd.h>
 #endif
 
 void disableXonXoff();
+void disableSignalHandling();
 bool initializeNcurses();
 bool initializeThemes();
 void setupMouse();
@@ -141,7 +143,7 @@ BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
                                                             after_file_load);
 
   // Phase 6: Render first display
-  editor.setMode(EditorMode::INSERT);
+  setupMouse();
   editor.display();
   wnoutrefresh(stdscr);
 
@@ -229,6 +231,7 @@ int main(int argc, char *argv[])
 
     // Initialize ncurses (users see this cost)
     disableXonXoff();
+    // disableSignalHandling();
     if (!initializeNcurses())
       return 1;
     if (!initializeThemes())
@@ -324,15 +327,13 @@ int main(int argc, char *argv[])
     }
   }
 
-  setupMouse();
-
   if (highlighterPtr)
   {
     editor.initializeViewportHighlighting();
   }
   // Start editor
   InputHandler inputHandler(editor);
-  editor.setMode(EditorMode::INSERT);
+  setupMouse();
   editor.display();
   wnoutrefresh(stdscr);
   doupdate();
@@ -376,15 +377,6 @@ int main(int argc, char *argv[])
 
     key = getch();
 
-    if (key == 'q' || key == 'Q')
-    {
-      if (editor.getMode() == EditorMode::NORMAL)
-      {
-        running = false;
-        continue;
-      }
-    }
-
     InputHandler::KeyResult result = inputHandler.handleKey(key);
 
     switch (result)
@@ -411,11 +403,13 @@ int main(int argc, char *argv[])
     }
   }
 
-  // Cleanup
+  erase();                 // Clear internal buffer
+  refresh();               // Push to screen
+  endwin();                // Release terminal
+  printf("\033[2J\033[H"); // ANSI: clear screen + home cursor
+  fflush(stdout);
   cleanupMouse();
-  attrset(A_NORMAL);
-  curs_set(1);
-  endwin();
+  return 0;
   return 0;
 }
 
@@ -520,12 +514,23 @@ void flushInputQueue()
   timeout(50);            // Restore your timeout
 }
 
+void disableSignalHandling()
+{
+#ifndef _WIN32
+  // Disable Ctrl+C (SIGINT) and Ctrl+Z (SIGTSTP)
+  signal(SIGINT, SIG_IGN);  // Ignore Ctrl+C
+  signal(SIGTSTP, SIG_IGN); // Ignore Ctrl+Z
+  signal(SIGQUIT, SIG_IGN); // Ignore Ctrl+
+#endif
+}
+
 void setupMouse()
 {
   mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
 #ifndef _WIN32
-  printf("\033[?1003h");
+  printf("\033[2 q");
   fflush(stdout);
+
 #endif
 }
 

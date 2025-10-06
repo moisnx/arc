@@ -13,27 +13,22 @@
 #define GETMOUSE_FUNC nc_getmouse
 
 // PDCursesMod VT-mode extended key codes
-#define PDC_KEY_UP 60418    // 0xec02
-#define PDC_KEY_DOWN 60419  // 0xec03
-#define PDC_KEY_RIGHT 60420 // 0xec04
-#define PDC_KEY_LEFT 60421  // 0xec05
+#define PDC_KEY_UP 60418
+#define PDC_KEY_DOWN 60419
+#define PDC_KEY_RIGHT 60420
+#define PDC_KEY_LEFT 60421
 
 #else
 #define GETMOUSE_FUNC getmouse
 #endif
 
 InputHandler::InputHandler(Editor &editor)
-    : editor_(editor), mouse_enabled_(true), global_shortcuts_enabled_(true)
+    : editor_(editor), mouse_enabled_(true)
 {
 }
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
-  // static std::ofstream debug("keylog.txt", std::ios::app);
-  // debug << "Key: " << key << " (hex: 0x" << std::hex << key << std::dec <<
-  // ")"
-  //       << std::endl;
-
   // Handle special events first
   if (key == KEY_MOUSE && mouse_enabled_)
   {
@@ -45,168 +40,20 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
     return handleResizeEvent();
   }
 
-  // Handle global shortcuts (work in any mode)
-  if (global_shortcuts_enabled_ && isGlobalShortcut(key))
-  {
-    return handleGlobalShortcut(key);
-  }
-
-  // Handle mode-specific keys
-  EditorMode current_mode = editor_.getMode();
-
-  switch (current_mode)
-  {
-  case EditorMode::NORMAL:
-    return handleNormalMode(key);
-  case EditorMode::INSERT:
-    return handleInsertMode(key);
-  case EditorMode::VISUAL:
-    return handleVisualMode(key);
-  default:
-    return KeyResult::NOT_HANDLED;
-  }
-}
-
-bool InputHandler::isGlobalShortcut(int key) const
-{
-  switch (key)
-  {
-  case CTRL('s'): // Save
-  case CTRL('z'): // Undo
-  case CTRL('y'): // Redo
-  case CTRL('q'): // Quit (future)
-    return true;
-  default:
-    return false;
-  }
-}
-
-InputHandler::KeyResult InputHandler::handleGlobalShortcut(int key)
-{
-  switch (key)
-  {
-  case CTRL('s'):
-    editor_.saveFile();
-    return KeyResult::REDRAW;
-
-  case CTRL('z'):
-    editor_.undo();
-    return KeyResult::REDRAW;
-
-  case CTRL('y'):
-    editor_.redo();
-    return KeyResult::REDRAW;
-
-  case CTRL('q'):
-    // TODO: Check for unsaved changes
-    return KeyResult::QUIT;
-
-  default:
-    return KeyResult::NOT_HANDLED;
-  }
-}
-
-InputHandler::KeyResult InputHandler::handleNormalMode(int key)
-{
-  // Mode switching keys
-  switch (key)
-  {
-  case 'i':
-    editor_.setMode(EditorMode::INSERT);
-    return KeyResult::REDRAW;
-
-  case 'I':
-    editor_.setMode(EditorMode::INSERT);
-    editor_.moveCursorToLineStart();
-    return KeyResult::REDRAW;
-
-  case 'a':
-    editor_.setMode(EditorMode::INSERT);
-    editor_.moveCursorRight();
-    return KeyResult::REDRAW;
-
-  case 'A':
-    editor_.setMode(EditorMode::INSERT);
-    editor_.moveCursorToLineEnd();
-    return KeyResult::REDRAW;
-
-  case 'o':
-    editor_.moveCursorToLineEnd();
-    editor_.insertNewline();
-    editor_.setMode(EditorMode::INSERT);
-    return KeyResult::REDRAW;
-
-  case 'O':
-    editor_.moveCursorToLineStart();
-    editor_.insertNewline();
-    editor_.moveCursorUp();
-    editor_.setMode(EditorMode::INSERT);
-    return KeyResult::REDRAW;
-
-  case 'v':
-  case 'V':
-    editor_.setMode(EditorMode::VISUAL);
-    return KeyResult::REDRAW;
-
-  // Editing commands
-  case 'x':
-    editor_.deleteChar();
-    return KeyResult::REDRAW;
-
-  case 'd':
-    editor_.deleteLine();
-    return KeyResult::REDRAW;
-  }
-
-  // Movement keys (allow character keys like 'h', 'j', 'k', 'l')
-  if (handleMovementKey(key, false, true))
+  // Global shortcuts (Ctrl+S, Ctrl+Z, etc.)
+  if (handleGlobalShortcut(key))
   {
     return KeyResult::REDRAW;
   }
 
-  return KeyResult::NOT_HANDLED;
-}
-
-InputHandler::KeyResult InputHandler::handleInsertMode(int key)
-{
-  // Mode switching
-  if (key == KEY_ESC)
+  // Movement keys (handles both normal and shift+movement for selection)
+  if (handleMovementKey(key, false))
   {
-    editor_.setMode(EditorMode::NORMAL);
-    editor_.moveCursorLeft(); // Vim-like behavior
     return KeyResult::REDRAW;
   }
 
-  // Text editing
-  switch (key)
-  {
-  case KEY_BACKSPACE:
-  case KEY_BACKSPACE_ALT:
-  case 8: // Ctrl+H
-    editor_.backspace();
-    return KeyResult::REDRAW;
-
-  case KEY_DC:
-    editor_.deleteChar();
-    return KeyResult::REDRAW;
-
-  case KEY_ENTER:
-  case '\r':
-    editor_.insertNewline();
-    return KeyResult::REDRAW;
-
-  case KEY_TAB:
-    // Insert 4 spaces instead of tab
-    for (int i = 0; i < 4; i++)
-    {
-      editor_.insertChar(' ');
-    }
-    return KeyResult::REDRAW;
-  }
-
-  // Movement keys work in insert mode (ONLY non-character keys like arrows)
-  if (handleMovementKey(
-          key, false, false)) // <-- MODIFIED: Pass 'false' to disable char keys
+  // Editing keys (backspace, delete, enter, tab)
+  if (handleEditingKey(key))
   {
     return KeyResult::REDRAW;
   }
@@ -214,6 +61,12 @@ InputHandler::KeyResult InputHandler::handleInsertMode(int key)
   // Insert printable characters
   if (isPrintableChar(key))
   {
+    // Delete selection first if one exists
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+
     editor_.insertChar(static_cast<char>(key));
     return KeyResult::REDRAW;
   }
@@ -221,114 +74,223 @@ InputHandler::KeyResult InputHandler::handleInsertMode(int key)
   return KeyResult::NOT_HANDLED;
 }
 
-InputHandler::KeyResult InputHandler::handleVisualMode(int key)
+bool InputHandler::handleGlobalShortcut(int key)
 {
-  // Exit visual mode
   switch (key)
   {
-  case KEY_ESC:
-  case 'v':
-    editor_.setMode(EditorMode::NORMAL);
-    editor_.clearSelection();
-    return KeyResult::REDRAW;
+  case CTRL('s'):
+    editor_.saveFile();
+    return true;
 
-  case 'x':
-  case KEY_DC:
-    editor_.deleteSelection();
-    editor_.setMode(EditorMode::NORMAL);
-    return KeyResult::REDRAW;
+  case CTRL('z'):
+    editor_.undo();
+    return true;
 
-  case 'i':
-    editor_.deleteSelection();
-    editor_.setMode(EditorMode::INSERT);
-    return KeyResult::REDRAW;
+  case CTRL('y'):
+    editor_.redo();
+    return true;
+
+  case CTRL('q'):
+    // TODO: Check for unsaved changes and prompt
+    if (editor_.hasUnsavedChanges())
+    {
+      // For now, just quit - add confirmation dialog later
+      exit(0);
+    }
+    exit(0);
+    return true;
+
+  case CTRL('c'):
+    editor_.copySelection();
+    return true;
+
+  case CTRL('x'):
+    editor_.cutSelection();
+    return true;
+
+  case CTRL('v'):
+    editor_.pasteFromClipboard();
+    return true;
+
+  case CTRL('a'):
+    editor_.selectAll();
+    return true;
+
+  default:
+    return false;
   }
-
-  // Movement keys extend selection in visual mode (allow character keys)
-  if (handleMovementKey(key, true, true))
-  {
-    return KeyResult::REDRAW;
-  }
-
-  return KeyResult::NOT_HANDLED;
 }
 
-// MODIFIED: Added 'allow_char_keys' parameter with default 'true'
-bool InputHandler::handleMovementKey(int key, bool extend_selection,
-                                     bool allow_char_keys)
+bool InputHandler::handleMovementKey(int key, bool shift_held)
 {
+  // Detect if shift is being held for this key
+  bool extending_selection = false;
+
+#ifdef _WIN32
+  if (PDC_get_key_modifiers() & PDC_KEY_MODIFIER_SHIFT)
+  {
+    extending_selection = true;
+  }
+#endif
+
+  // Check for shift-modified arrow keys (Unix/ncurses)
   switch (key)
   {
-  // Basic movement
-  case 'h':
-    if (!allow_char_keys)
-      return false;
-  case KEY_LEFT:
+  case KEY_SLEFT:
+  case KEY_SRIGHT:
+  case KEY_SR:
+  case KEY_SF:
 #ifdef _WIN32
-  case PDC_KEY_LEFT: // 60421
+  case KEY_SUP:
+  case KEY_SDOWN:
+#endif
+    extending_selection = true;
+    break;
+  }
+
+  // IMPROVED: Start selection BEFORE movement if shift held
+  if (extending_selection)
+  {
+    editor_.startSelectionIfNeeded();
+  }
+  else
+  {
+    // Clear selection BEFORE movement if no shift
+    editor_.clearSelection();
+  }
+
+  // Handle the actual movement
+  bool moved = false;
+
+  switch (key)
+  {
+  case KEY_LEFT:
+  case KEY_SLEFT:
+#ifdef _WIN32
+  case PDC_KEY_LEFT:
 #endif
     editor_.moveCursorLeft();
-    return true;
+    moved = true;
+    break;
 
-  case 'j':
-    if (!allow_char_keys)
-      return false;
-  case KEY_DOWN:
-#ifdef _WIN32
-  case PDC_KEY_DOWN: // 60419
-#endif
-    editor_.moveCursorDown();
-    return true;
-
-  case 'k':
-    if (!allow_char_keys)
-      return false;
-  case KEY_UP:
-#ifdef _WIN32
-  case PDC_KEY_UP: // 60418
-#endif
-    editor_.moveCursorUp();
-    return true;
-
-  case 'l':
-    if (!allow_char_keys)
-      return false;
   case KEY_RIGHT:
+  case KEY_SRIGHT:
 #ifdef _WIN32
-  case PDC_KEY_RIGHT: // 60420
+  case PDC_KEY_RIGHT:
 #endif
     editor_.moveCursorRight();
-    return true;
+    moved = true;
+    break;
 
-  // Line movement
-  case '0':
-    if (!allow_char_keys)
-      return false;
-    editor_.moveCursorToLineStart();
-    return true;
+  case KEY_UP:
+  case KEY_SR:
+#ifdef _WIN32
+  case PDC_KEY_UP:
+  case KEY_SUP:
+#endif
+    editor_.moveCursorUp();
+    moved = true;
+    break;
 
-  case '$':
-    if (!allow_char_keys)
-      return false;
-    editor_.moveCursorToLineEnd();
-    return true;
+  case KEY_DOWN:
+  case KEY_SF:
+#ifdef _WIN32
+  case PDC_KEY_DOWN:
+  case KEY_SDOWN:
+#endif
+    editor_.moveCursorDown();
+    moved = true;
+    break;
 
-  // Page movement (always allowed)
-  case KEY_PPAGE:
-    editor_.pageUp();
-    return true;
-
-  case KEY_NPAGE:
-    editor_.pageDown();
-    return true;
-
-  // Extended keys (always allowed)
   case KEY_HOME:
     editor_.moveCursorToLineStart();
-    return true;
+    moved = true;
+    break;
 
   case KEY_END:
     editor_.moveCursorToLineEnd();
+    moved = true;
+    break;
+
+  case KEY_PPAGE:
+    editor_.pageUp();
+    moved = true;
+    break;
+
+  case KEY_NPAGE:
+    editor_.pageDown();
+    moved = true;
+    break;
+
+  default:
+    return false;
+  }
+
+  // IMPROVED: Always update selection end if extending
+  if (moved && extending_selection)
+  {
+    editor_.updateSelectionEnd();
+  }
+
+  return moved;
+}
+bool InputHandler::handleEditingKey(int key)
+{
+  switch (key)
+  {
+  case KEY_BACKSPACE:
+  case KEY_BACKSPACE_ALT:
+  case 8: // Ctrl+H
+    // If there's a selection, delete it instead of single backspace
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    else
+    {
+      editor_.backspace();
+    }
+    return true;
+
+  case KEY_DC: // Delete key
+    // If there's a selection, delete it
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    else
+    {
+      editor_.deleteChar();
+    }
+    return true;
+
+  case KEY_ENTER:
+  case '\r':
+    // case '\n':
+    // Delete selection first if one exists
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    editor_.insertNewline();
+    return true;
+
+  case KEY_TAB:
+    // Delete selection first if one exists
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    // Insert 4 spaces instead of tab
+    for (int i = 0; i < 4; i++)
+    {
+      editor_.insertChar(' ');
+    }
+    return true;
+
+  case KEY_ESC:
+    // Clear selection on escape
+    editor_.clearSelection();
     return true;
 
   default:
@@ -350,32 +312,8 @@ InputHandler::KeyResult InputHandler::handleMouseEvent()
 InputHandler::KeyResult InputHandler::handleResizeEvent()
 {
   editor_.handleResize();
-  flushinp(); // Clear input buffer
+  flushinp();
   return KeyResult::REDRAW;
-}
-
-bool InputHandler::isMovementKey(int key) const
-{
-  switch (key)
-  {
-  case 'h':
-  case 'j':
-  case 'k':
-  case 'l':
-  case '0':
-  case '$':
-  case KEY_LEFT:
-  case KEY_RIGHT:
-  case KEY_UP:
-  case KEY_DOWN:
-  case KEY_HOME:
-  case KEY_END:
-  case KEY_PPAGE:
-  case KEY_NPAGE:
-    return true;
-  default:
-    return false;
-  }
 }
 
 bool InputHandler::isPrintableChar(int key) const

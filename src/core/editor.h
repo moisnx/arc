@@ -1,27 +1,17 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
-// Core C++ Libraries
 #include <stack>
 #include <string>
 
 #ifdef _WIN32
-#include <curses.h> // pdcurses on Windows
+#include <curses.h>
 #else
-#include <ncurses.h> // ncurses on Unix-like systems
+#include <ncurses.h>
 #endif
 
-// Local Project Headers
 #include "buffer.h"
 #include "src/features/syntax_highlighter.h"
-
-// Editor modes
-enum EditorMode
-{
-  NORMAL, // Navigate, select, commands
-  INSERT, // Text editing
-  VISUAL  // Selection mode
-};
 
 // Undo/Redo system
 struct EditorState
@@ -36,7 +26,7 @@ struct EditorState
 class Editor
 {
 public:
-  // Public API
+  // Core API
   Editor(SyntaxHighlighter *highlighter);
   void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
   bool loadFile(const std::string &fname);
@@ -45,15 +35,9 @@ public:
   void drawStatusBar();
   void handleResize();
   void handleMouse(MEVENT &event);
-  void clearSelection();
-  std::string getFilename() const { return filename; }
-  std::string getFirstLine() const
-  {
-    // Assumption: The GapBuffer class has a method 'getLine(int lineIndex)'
-    // that returns the string content of the line at the specified index.
-    return buffer.getLine(0);
-  }
 
+  std::string getFilename() const { return filename; }
+  std::string getFirstLine() const { return buffer.getLine(0); }
   GapBuffer getBuffer() { return buffer; }
 
   // Movement
@@ -67,21 +51,28 @@ public:
   void moveCursorToLineEnd();
   void scrollUp(int lines = 3);
   void scrollDown(int lines = 3);
-  void moveCursorTo(int newLine, int newCol);
   void validateCursorAndViewport();
-  void forceCursorSync();
-
-  // Mode management
-  void setMode(EditorMode newMode);
-  EditorMode getMode() const { return currentMode; }
+  void positionCursor();
 
   // Text editing
   void insertChar(char ch);
   void insertNewline();
-  void deleteChar(); // Delete character at cursor (Delete key)
-  void backspace();  // Delete character before cursor (Backspace key)
+  void deleteChar();
+  void backspace();
   void deleteLine();
+
+  // Selection management
+  void clearSelection();
+  void startSelectionIfNeeded();
+  void updateSelectionEnd();
   void deleteSelection();
+  std::string getSelectedText();
+
+  // Clipboard operations
+  void copySelection();
+  void cutSelection();
+  void pasteFromClipboard();
+  void selectAll();
 
   // Undo/Redo
   void saveState();
@@ -90,57 +81,15 @@ public:
 
   // Utility
   bool hasUnsavedChanges() const { return isModified; }
-  void ensureCursorVisible();
+  void reloadConfig();
+  void initializeViewportHighlighting();
+  void updateSyntaxHighlighting();
 
   // Debug
   void debugPrintState(const std::string &context);
   bool validateEditorState();
-  void updateSyntaxHighlighting()
-  {
-    if (syntaxHighlighter)
-    {
-      std::string extension = getFileExtension();
-      if (!extension.empty())
-      {
-        syntaxHighlighter->setLanguage(extension);
-      }
-      else
-      {
-        syntaxHighlighter->setLanguage("txt");
-      }
-    }
-  };
-  void reloadConfig();
-  void initializeViewportHighlighting();
-  void positionCursor();
 
-private:
-  // Core Data
-  std::string currentFileName;
-  GapBuffer buffer;
-  std::string filename;
-  SyntaxHighlighter *syntaxHighlighter;
-
-  bool isSaving = false; // Add this flag
-  void notifyBufferChanged()
-  {
-    if (syntaxHighlighter)
-    {
-      syntaxHighlighter->bufferChanged(buffer);
-    }
-  }
-
-  // Mode system
-  EditorMode currentMode = EditorMode::NORMAL;
-
-  // Viewport and Cursor State
-  int viewportTop = 0;
-  int viewportLeft = 0;
-  int viewportHeight;
-  int cursorLine = 0;
-  int cursorCol = 0;
-
-  // Selection State
+  // Selection state
   int selectionStartLine = 0;
   int selectionStartCol = 0;
   int selectionEndLine = 0;
@@ -148,38 +97,45 @@ private:
   bool hasSelection = false;
   bool isSelecting = false;
 
-  // Undo/Redo system
+private:
+  // Core data
+  GapBuffer buffer;
+  std::string filename;
+  SyntaxHighlighter *syntaxHighlighter;
+  bool isSaving = false;
+
+  // Viewport and cursor
+  int viewportTop = 0;
+  int viewportLeft = 0;
+  int viewportHeight;
+  int cursorLine = 0;
+  int cursorCol = 0;
+
+  // Clipboard
+  std::string clipboard;
+
+  // Undo/Redo
   std::stack<EditorState> undoStack;
   std::stack<EditorState> redoStack;
   static const size_t MAX_UNDO_LEVELS = 100;
 
   // File state
   bool isModified = false;
-
-  // Configuration
   int tabSize = 4;
 
-  // Private Helper Methods
+  // Private helpers
   std::string expandTabs(const std::string &line, int tabSize = 4);
   std::string getFileExtension();
   bool isPositionSelected(int line, int col);
   bool mouseToFilePos(int mouseRow, int mouseCol, int &fileRow, int &fileCol);
   void updateCursorAndViewport(int newLine, int newCol);
-
-  // Internal editing helpers
   void markModified();
   void splitLineAtCursor();
   void joinLineWithNext();
   EditorState getCurrentState();
   void restoreState(const EditorState &state);
   void limitUndoStack();
-
-  // Selection helpers
   std::pair<std::pair<int, int>, std::pair<int, int>> getNormalizedSelection();
-  std::string getSelectedText();
-
-  void updateCursorStyle();
-  void restoreDefaultCursor();
 };
 
 #endif // EDITOR_H

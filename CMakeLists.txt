@@ -386,7 +386,7 @@ set(SOURCES
     src/core/buffer.cpp
     src/core/config_manager.cpp
     src/ui/input_handler.cpp
-    src/ui/renderer.cpp
+    # src/ui/renderer.cpp
     src/ui/style_manager.cpp
     src/features/syntax_config_loader.cpp
     src/features/syntax_highlighter.cpp
