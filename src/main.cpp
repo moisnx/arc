@@ -398,10 +398,8 @@ int main(int argc, char *argv[])
       editor.display();
       wnoutrefresh(stdscr);
       doupdate();
-<<<<<<< HEAD
-      == == == = editor.positionCursor(); // Position AFTER flush
-      curs_set(1);                        // Show immediately
->>>>>>> bugfix/pdcurses-scroll-bounce
+      editor.positionCursor(); // Position AFTER flush
+      curs_set(1);             // Show immediately
       break;
     case InputHandler::KeyResult::NOT_HANDLED:
       break;
@@ -446,16 +444,8 @@ bool initializeNcurses()
   curs_set(1);
 
 #ifdef _WIN32
-  <<<<<<< HEAD timeout(100);
-  PDC_set_blink(FALSE);
-  PDC_return_key_modifiers(TRUE);
-  // Add these:
-  PDC_save_key_modifiers(TRUE);
-  scrollok(stdscr, FALSE); // Disable automatic scrolling
-  leaveok(stdscr, FALSE);  // Update cursor position properly
-  == == == =
-               // CRITICAL: Don't use timeout on Windows - causes ERR spam
-      nodelay(stdscr, FALSE); // Blocking mode
+  // CRITICAL: Don't use timeout on Windows - causes ERR spam
+  nodelay(stdscr, FALSE); // Blocking mode
 
   PDC_set_blink(FALSE);
   PDC_return_key_modifiers(TRUE);
@@ -465,7 +455,6 @@ bool initializeNcurses()
   raw();
   meta(stdscr, TRUE);
   intrflush(stdscr, FALSE);
->>>>>>> bugfix/pdcurses-scroll-bounce
 #else
   timeout(50);
 #endif
