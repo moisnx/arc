@@ -411,6 +411,11 @@ target_link_libraries(arc PRIVATE
     ${EFSW_LIBRARIES}
 )
 
+if(WIN32)
+    # Link the Windows Multimedia library required by PDCursesMod's beep()
+    target_link_libraries(arc PRIVATE winmm) 
+endif()
+
 # Include directories
 target_include_directories(arc PRIVATE 
     . 

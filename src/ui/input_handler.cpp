@@ -1,7 +1,8 @@
 #include "input_handler.h"
+#include <fstream>
 #include <iostream>
 
-// Key constants
+// PDCursesMod key code compatibility
 #define CTRL(x) ((x) & 0x1f)
 #define KEY_TAB 9
 #define KEY_ENTER 10
@@ -10,6 +11,13 @@
 
 #ifdef _WIN32
 #define GETMOUSE_FUNC nc_getmouse
+
+// PDCursesMod VT-mode extended key codes
+#define PDC_KEY_UP 60418    // 0xec02
+#define PDC_KEY_DOWN 60419  // 0xec03
+#define PDC_KEY_RIGHT 60420 // 0xec04
+#define PDC_KEY_LEFT 60421  // 0xec05
+
 #else
 #define GETMOUSE_FUNC getmouse
 #endif
@@ -21,6 +29,10 @@ InputHandler::InputHandler(Editor &editor)
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
+  static std::ofstream debug("keylog.txt", std::ios::app);
+  debug << "Key: " << key << " (hex: 0x" << std::hex << key << std::dec << ")"
+        << std::endl;
+
   // Handle special events first
   if (key == KEY_MOUSE && mouse_enabled_)
   {
@@ -249,42 +261,54 @@ bool InputHandler::handleMovementKey(int key, bool extend_selection,
   // Basic movement
   case 'h':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
   case KEY_LEFT:
+#ifdef _WIN32
+  case PDC_KEY_LEFT: // 60421
+#endif
     editor_.moveCursorLeft();
     return true;
 
   case 'j':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
   case KEY_DOWN:
+#ifdef _WIN32
+  case PDC_KEY_DOWN: // 60419
+#endif
     editor_.moveCursorDown();
     return true;
 
   case 'k':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
   case KEY_UP:
+#ifdef _WIN32
+  case PDC_KEY_UP: // 60418
+#endif
     editor_.moveCursorUp();
     return true;
 
   case 'l':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
   case KEY_RIGHT:
+#ifdef _WIN32
+  case PDC_KEY_RIGHT: // 60420
+#endif
     editor_.moveCursorRight();
     return true;
 
   // Line movement
   case '0':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
     editor_.moveCursorToLineStart();
     return true;
 
   case '$':
     if (!allow_char_keys)
-      return false; // <-- NEW CHECK
+      return false;
     editor_.moveCursorToLineEnd();
     return true;
 
