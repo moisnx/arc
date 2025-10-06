@@ -83,11 +83,11 @@ void StyleManager::initialize()
   const char *wsl_distro = getenv("WSL_DISTRO_NAME");
   if (wsl_distro)
   {
-    std::cerr << "WSL detected: " << wsl_distro << std::endl;
+    // std::cerr << "WSL detected: " << wsl_distro << std::endl;
     // WSL sometimes has color issues, force TERM if needed
     if (!getenv("TERM") || strcmp(getenv("TERM"), "dumb") == 0)
     {
-      std::cerr << "Setting TERM=xterm-256color for WSL" << std::endl;
+      // std::cerr << "Setting TERM=xterm-256color for WSL" << std::endl;
       setenv("TERM", "xterm-256color", 1);
     }
   }
@@ -520,7 +520,7 @@ void StyleManager::apply_theme()
 
   bkgdset(' ' | COLOR_PAIR(BACKGROUND_PAIR_ID));
   clear();
-  refresh();
+  // refresh();
 }
 
 // Also add this helper function to detect and optimize for WSL
