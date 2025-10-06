@@ -69,6 +69,7 @@ public:
   void scrollDown(int lines = 3);
   void moveCursorTo(int newLine, int newCol);
   void validateCursorAndViewport();
+  void forceCursorSync();
 
   // Mode management
   void setMode(EditorMode newMode);
