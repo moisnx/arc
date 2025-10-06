@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
+#include <vector>
 
 const size_t GapBuffer::DEFAULT_GAP_SIZE;
 const size_t GapBuffer::MIN_GAP_SIZE;
@@ -19,12 +21,6 @@ GapBuffer::GapBuffer(const std::string &initialText) : GapBuffer()
     insertText(0, initialText);
   }
 }
-
-#include "buffer.h"
-#include <algorithm>
-#include <fstream>
-#include <iostream>
-#include <vector>
 
 bool GapBuffer::loadFromFile(const std::string &filename)
 {

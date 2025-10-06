@@ -29,9 +29,10 @@ InputHandler::InputHandler(Editor &editor)
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
-  static std::ofstream debug("keylog.txt", std::ios::app);
-  debug << "Key: " << key << " (hex: 0x" << std::hex << key << std::dec << ")"
-        << std::endl;
+  // static std::ofstream debug("keylog.txt", std::ios::app);
+  // debug << "Key: " << key << " (hex: 0x" << std::hex << key << std::dec <<
+  // ")"
+  //       << std::endl;
 
   // Handle special events first
   if (key == KEY_MOUSE && mouse_enabled_)

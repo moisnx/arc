@@ -1138,6 +1138,12 @@ bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
 
+  if (syntaxHighlighter)
+  {
+    std::string extension = getFileExtension();
+    syntaxHighlighter->setLanguage(extension);
+  }
+
   if (!buffer.loadFromFile(filename))
   {
     buffer.clear();
@@ -1146,11 +1152,6 @@ bool Editor::loadFile(const std::string &fname)
   }
 
   // Set language but DON'T parse yet - parsing happens on first display
-  if (syntaxHighlighter)
-  {
-    std::string extension = getFileExtension();
-    syntaxHighlighter->setLanguage(extension);
-  }
 
   isModified = false;
   return true;
