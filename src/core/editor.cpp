@@ -439,6 +439,7 @@ void Editor::display()
   }
 
   drawStatusBar();
+  positionCursor();
 
   // REMOVED: positionCursor() call
   // Cursor positioning now happens AFTER doupdate() in main loop
