@@ -34,6 +34,6 @@
 [submodule "deps/tree-sitter-go"]
 	path = deps/tree-sitter-go
 	url = https://github.com/tree-sitter/tree-sitter-go
-[submodule "deps/pdcursesmod"]
-	path = deps/pdcursesmod
+[submodule "deps/PDCursesMod"]
+	path = deps/PDCursesMod
 	url = https://github.com/Bill-Gray/PDCursesMod
