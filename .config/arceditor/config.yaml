@@ -3,7 +3,7 @@
 appearance:
   theme: default
 editor:
-  tab_size: 2
+  tab_size: 4
   line_numbers: true
   cursor_style: auto
 syntax:
