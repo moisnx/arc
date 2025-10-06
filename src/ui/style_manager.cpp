@@ -120,7 +120,13 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
 
     // Parse the hex color
     RGB rgb = parse_hex_color(config_value);
-
+#ifdef _WIN32
+    // CRITICAL FIX: On Windows, NEVER call init_color() during runtime
+    // Just use closest 8-color match
+    short closest = find_closest_8color(rgb);
+    color_cache[config_value] = closest; // Cache it
+    return closest;
+#else
     if (supports_256_colors_cache && next_custom_color_id < COLORS)
     {
       // 256-color mode: use init_color for true color mapping
@@ -154,7 +160,7 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
                   << ", falling back to closest 8-color" << std::endl;
       }
     }
-
+#endif
     // Fallback to legacy 8-color mode
     return find_closest_8color(rgb);
   }
