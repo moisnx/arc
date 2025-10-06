@@ -341,6 +341,7 @@ void Editor::display()
     // OPTIMIZATION 4: Track current span index (avoid O(n) per character)
     int current_span_idx = 0;
     int num_spans = currentLineSpans.size();
+    static chtype current_attrs = A_NORMAL;
 
     // Content rendering
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
@@ -376,7 +377,7 @@ void Editor::display()
           isSelected = true; // Middle line, fully selected
         }
       }
-
+      chtype needed_attrs;
       if (isSelected)
       {
         attron(COLOR_PAIR(14) | A_REVERSE);
@@ -442,6 +443,18 @@ void Editor::display()
   }
 
   drawStatusBar();
+  attrset(A_NORMAL);  // Reset to default state
+  attroff(A_REVERSE); // Explicitly clear reverse video
+  attroff(A_BOLD);    // Explicitly clear bold
+  // Clear ALL color pairs
+  for (int i = 0; i < 20; i++)
+  {
+    attroff(COLOR_PAIR(i));
+  }
+
+#ifdef _WIN32
+  refresh();
+#endif
   positionCursor();
 }
 // Also fix the drawStatusBar function
@@ -454,8 +467,9 @@ void Editor::drawStatusBar()
   move(statusRow, 0);
 
   // CRITICAL: Set status bar background before clearing
-  attrset(COLOR_PAIR(STATUS_BAR));
-  clrtoeol(); // Clear entire line with status bar background
+  chtype status_bg = COLOR_PAIR(STATUS_BAR);
+  wbkgdset(stdscr, status_bg | ' '); // Set background character
+  clrtoeol();                        // This now uses the background we just set
 
   move(statusRow, 0);
 
@@ -479,9 +493,9 @@ void Editor::drawStatusBar()
     break;
   }
 
-  attron(COLOR_PAIR(modeColor) | A_BOLD);
+  wattron(stdscr, COLOR_PAIR(modeColor) | A_BOLD);
   printw("%s", modeStr.c_str());
-  attroff(COLOR_PAIR(modeColor) | A_BOLD);
+  wattroff(stdscr, COLOR_PAIR(modeColor) | A_BOLD);
 
   attron(COLOR_PAIR(STATUS_BAR));
   printw(" ");
@@ -606,6 +620,7 @@ void Editor::drawStatusBar()
     attroff(COLOR_PAIR(STATUS_BAR_GREEN) | A_BOLD);
     attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
   }
+  wbkgdset(stdscr, COLOR_PAIR(0) | ' ');
 }
 
 void Editor::handleResize()
@@ -1796,4 +1811,15 @@ void Editor::initializeViewportHighlighting()
     // Pre-parse viewport so first display() is instant
     syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
   }
+}
+
+void Editor::forceCursorSync()
+{
+#ifdef _WIN32
+  // Force PDCurses to resync with Windows Console
+  int y, x;
+  getyx(stdscr, y, x);
+  move(y, x); // Re-move to same position forces sync
+  refresh();
+#endif
 }
