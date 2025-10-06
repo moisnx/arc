@@ -344,15 +344,22 @@ endif()
 
 # Find packages - platform-specific approach
 if(WIN32)
-    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
-    
-    find_package(pdcursesmod  CONFIG REQUIRED)
-    
+   set(PDCURSESMOD_DIR ${DEPS_DIR}/PDCursesMod/wincon)
+
+if(EXISTS "${PDCURSESMOD_DIR}/pdcurses.lib")
+    message(STATUS "Using locally built PDCursesMod from ${PDCURSESMOD_DIR}")
+
+    add_library(pdcursesmod STATIC IMPORTED)
     set_target_properties(pdcursesmod PROPERTIES
-    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/deps/PDCursesMod/wincon/pdcurses.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/deps/PDCursesMod"
-)
-set(CURSES_LIBRARIES pdcursesmod)
+        IMPORTED_LOCATION "${PDCURSESMOD_DIR}/pdcurses.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${DEPS_DIR}/PDCursesMod"
+    )
+
+    set(CURSES_LIBRARIES pdcursesmod)
+    set(CURSES_INCLUDE_DIRS "${DEPS_DIR}/PDCursesMod")
+else()
+    message(FATAL_ERROR "PDCursesMod not found at ${PDCURSESMOD_DIR}. Please build it manually with nmake -f Makefile.vc HAVE_VT=Y")
+endif()
     
 elseif(ANDROID)
     find_package(PkgConfig REQUIRED)
