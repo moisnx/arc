@@ -143,7 +143,7 @@ BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
   // Phase 6: Render first display
   editor.setMode(EditorMode::INSERT);
   editor.display();
-  refresh();
+  wnoutrefresh(stdscr);
 
   auto after_render = std::chrono::high_resolution_clock::now();
   result.first_render_time =
@@ -248,8 +248,8 @@ int main(int argc, char *argv[])
 
     // Render once (users see this)
     // editor.display();
-    refresh();
-
+    wnoutrefresh(stdscr);
+    doupdate();
     auto after_render = std::chrono::high_resolution_clock::now();
 
     // Cleanup
@@ -334,7 +334,8 @@ int main(int argc, char *argv[])
   InputHandler inputHandler(editor);
   editor.setMode(EditorMode::INSERT);
   editor.display();
-  refresh();
+  wnoutrefresh(stdscr);
+  doupdate();
   curs_set(1); // Ensure cursor is visible
 
   // Handle --quit for testing
@@ -366,11 +367,8 @@ int main(int argc, char *argv[])
     if (ConfigManager::isReloadPending())
     {
       editor.display();
-#ifdef _WIN32
-// Remove this block - display() already calls refresh() on Windows
-#else
-      refresh();
-#endif
+      wnoutrefresh(stdscr);
+      doupdate();
     }
 
     key = getch();
@@ -394,15 +392,15 @@ int main(int argc, char *argv[])
     case InputHandler::KeyResult::REDRAW:
     case InputHandler::KeyResult::HANDLED:
       editor.display();
-#ifdef _WIN32
-// On Windows, display() already calls refresh()
-// Don't call it again here
-#else
-      refresh();
-#endif
+      wnoutrefresh(stdscr);
+      doupdate();
       break;
     case InputHandler::KeyResult::NOT_HANDLED:
       break;
+    }
+    if (result != InputHandler::KeyResult::NOT_HANDLED)
+    {
+      doupdate();
     }
   }
 
