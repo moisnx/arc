@@ -366,9 +366,12 @@ int main(int argc, char *argv[])
   {
     if (ConfigManager::isReloadPending())
     {
+      curs_set(0); // Hide cursor
       editor.display();
       wnoutrefresh(stdscr);
       doupdate();
+      editor.positionCursor(); // Position AFTER flush
+      curs_set(1);             // Show cursor
     }
 
     key = getch();
@@ -391,9 +394,14 @@ int main(int argc, char *argv[])
       break;
     case InputHandler::KeyResult::REDRAW:
     case InputHandler::KeyResult::HANDLED:
+      curs_set(0); // Hide during render
       editor.display();
       wnoutrefresh(stdscr);
       doupdate();
+<<<<<<< HEAD
+      == == == = editor.positionCursor(); // Position AFTER flush
+      curs_set(1);                        // Show immediately
+>>>>>>> bugfix/pdcurses-scroll-bounce
       break;
     case InputHandler::KeyResult::NOT_HANDLED:
       break;
@@ -433,18 +441,31 @@ bool initializeNcurses()
 {
   initscr();
   cbreak();
-  keypad(stdscr, TRUE);
+  keypad(stdscr, TRUE); // This MUST be set for arrow keys
   noecho();
   curs_set(1);
 
 #ifdef _WIN32
-  timeout(100);
+  <<<<<<< HEAD timeout(100);
   PDC_set_blink(FALSE);
   PDC_return_key_modifiers(TRUE);
   // Add these:
   PDC_save_key_modifiers(TRUE);
   scrollok(stdscr, FALSE); // Disable automatic scrolling
   leaveok(stdscr, FALSE);  // Update cursor position properly
+  == == == =
+               // CRITICAL: Don't use timeout on Windows - causes ERR spam
+      nodelay(stdscr, FALSE); // Blocking mode
+
+  PDC_set_blink(FALSE);
+  PDC_return_key_modifiers(TRUE);
+  PDC_save_key_modifiers(TRUE);
+  scrollok(stdscr, FALSE);
+  leaveok(stdscr, FALSE);
+  raw();
+  meta(stdscr, TRUE);
+  intrflush(stdscr, FALSE);
+>>>>>>> bugfix/pdcurses-scroll-bounce
 #else
   timeout(50);
 #endif

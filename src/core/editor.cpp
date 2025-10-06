@@ -154,10 +154,17 @@ void Editor::positionCursor()
     if (screenCol >= contentStartCol && screenCol < cols)
     {
       move(screenRow, screenCol);
+#ifdef _WIN32
+      // Force cursor update on Windows
+      refresh();
+#endif
     }
     else
     {
       move(screenRow, contentStartCol);
+#ifdef _WIN32
+      refresh();
+#endif
     }
   }
 }
@@ -238,6 +245,7 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
+// In editor.cpp - Modified display() function
 void Editor::display()
 {
   if (!validateEditorState())
@@ -267,7 +275,7 @@ void Editor::display()
     endLine = buffer.getLineCount();
   }
 
-  // OPTIMIZATION 1: Pre-compute selection bounds ONCE
+  // Pre-compute selection bounds ONCE
   bool hasActiveSelection = (hasSelection || isSelecting);
   int sel_start_line = -1, sel_start_col = -1;
   int sel_end_line = -1, sel_end_col = -1;
@@ -281,13 +289,11 @@ void Editor::display()
     sel_end_col = end.second;
   }
 
-  // Tell highlighter which lines are in viewport
   if (syntaxHighlighter)
   {
     syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
 
-  // Get tab size once
   int currentTabSize = ConfigManager::getTabSize();
 
   // Render lines
@@ -315,7 +321,6 @@ void Editor::display()
 
     attrset(COLOR_PAIR(0));
 
-    // OPTIMIZATION 2: Expand tabs once per line
     std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
     std::vector<ColorSpan> currentLineSpans;
 
@@ -332,11 +337,9 @@ void Editor::display()
       }
     }
 
-    // OPTIMIZATION 3: Pre-check if this line is in selection range
     bool lineHasSelection =
         hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
 
-    // OPTIMIZATION 4: Track current span index (avoid O(n) per character)
     int current_span_idx = 0;
     int num_spans = currentLineSpans.size();
 
@@ -353,7 +356,6 @@ void Editor::display()
         ch = ' ';
       }
 
-      // OPTIMIZATION 5: Fast selection check (no function call)
       bool isSelected = false;
       if (lineHasSelection && charExists)
       {
@@ -371,7 +373,7 @@ void Editor::display()
         }
         else
         {
-          isSelected = true; // Middle line, fully selected
+          isSelected = true;
         }
       }
 
@@ -385,17 +387,14 @@ void Editor::display()
       {
         bool colorApplied = false;
 
-        // OPTIMIZATION 6: Sequential span lookup instead of linear search
         if (charExists && num_spans > 0)
         {
-          // Skip spans that are completely before this character
           while (current_span_idx < num_spans &&
                  currentLineSpans[current_span_idx].end <= fileCol)
           {
             current_span_idx++;
           }
 
-          // Check if current span covers this character
           if (current_span_idx < num_spans)
           {
             const auto &span = currentLineSpans[current_span_idx];
@@ -441,7 +440,11 @@ void Editor::display()
 
   drawStatusBar();
   positionCursor();
+
+  // REMOVED: positionCursor() call
+  // Cursor positioning now happens AFTER doupdate() in main loop
 }
+
 // Also fix the drawStatusBar function
 void Editor::drawStatusBar()
 {
