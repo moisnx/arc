@@ -73,7 +73,9 @@ BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
 
   // Phase 1: Initialize ncurses
   disableXonXoff();
+#ifndef _win32
   disableSignalHandling();
+#endif
   if (!initializeNcurses())
   {
     throw std::runtime_error("ncurses init failed");
@@ -233,7 +235,9 @@ int main(int argc, char *argv[])
 
     // Initialize ncurses (users see this cost)
     disableXonXoff();
+#ifndef _win32
     disableSignalHandling();
+#endif
     if (!initializeNcurses())
       return 1;
     if (!initializeThemes())
@@ -306,8 +310,9 @@ int main(int argc, char *argv[])
 
   // Initialize ncurses
   disableXonXoff();
+#ifndef _win32
   disableSignalHandling();
-
+#endif
   if (!initializeNcurses())
   {
     return 1;
@@ -421,7 +426,9 @@ int main(int argc, char *argv[])
   attrset(A_NORMAL);
   curs_set(1);
   endwin();
+#ifndef _win32
   restoreSignalHandling();
+#endif
   return 0;
 }
 
