@@ -85,6 +85,7 @@ InputHandler::handleGlobalShortcut(int key)
     return KeyResult::REDRAW;
 
   case CTRL('z'):
+    // std::cerr << "Clicked CTRL+Z!";
     editor_.undo();
     return KeyResult::REDRAW;
 

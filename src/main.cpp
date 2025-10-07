@@ -13,12 +13,15 @@
 #ifdef _WIN32
 #include <curses.h>
 #else
+#include <csignal>
 #include <ncurses.h>
 #include <termios.h>
 #include <unistd.h>
 #endif
 
 void disableXonXoff();
+void disableSignalHandling();
+void restoreSignalHandling();
 bool initializeNcurses();
 bool initializeThemes();
 void setupMouse();
@@ -70,6 +73,7 @@ BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
 
   // Phase 1: Initialize ncurses
   disableXonXoff();
+  disableSignalHandling();
   if (!initializeNcurses())
   {
     throw std::runtime_error("ncurses init failed");
@@ -229,6 +233,7 @@ int main(int argc, char *argv[])
 
     // Initialize ncurses (users see this cost)
     disableXonXoff();
+    disableSignalHandling();
     if (!initializeNcurses())
       return 1;
     if (!initializeThemes())
@@ -301,6 +306,7 @@ int main(int argc, char *argv[])
 
   // Initialize ncurses
   disableXonXoff();
+  disableSignalHandling();
 
   if (!initializeNcurses())
   {
@@ -415,6 +421,7 @@ int main(int argc, char *argv[])
   attrset(A_NORMAL);
   curs_set(1);
   endwin();
+  restoreSignalHandling();
   return 0;
 }
 
@@ -438,7 +445,8 @@ void disableXonXoff()
 bool initializeNcurses()
 {
   initscr();
-  cbreak();
+  //   cbreak();
+  raw();
   keypad(stdscr, TRUE); // This MUST be set for arrow keys
   noecho();
   curs_set(1);
@@ -507,6 +515,28 @@ bool initializeThemes()
   // NOTE: Initial theme load logic removed from here
   return true;
 }
+
+#ifndef _WIN32
+struct sigaction old_int, old_tstp, old_quit;
+
+void disableSignalHandling()
+{
+  struct sigaction sa;
+  sa.sa_handler = SIG_IGN;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+
+  sigaction(SIGINT, &sa, &old_int);   // Ignore Ctrl+C
+  sigaction(SIGTSTP, &sa, &old_tstp); // Ignore Ctrl+Z
+  sigaction(SIGQUIT, &sa, &old_quit); // Ignore Ctrl+
+}
+void restoreSignalHandling()
+{
+  sigaction(SIGINT, &old_int, NULL);
+  sigaction(SIGTSTP, &old_tstp, NULL);
+  sigaction(SIGQUIT, &old_quit, NULL);
+}
+#endif
 
 void flushInputQueue()
 {

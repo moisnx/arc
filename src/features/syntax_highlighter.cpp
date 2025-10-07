@@ -366,8 +366,9 @@ void SyntaxHighlighter::bufferChanged(const GapBuffer &buffer)
   }
   else if (tree_)
   {
-    std::cerr
-        << "DEBUG: Skipping reparse - tree exists, using incremental edits\n";
+    // std::cerr
+    //     << "DEBUG: Skipping reparse - tree exists, using incremental
+    //     edits\n";
     // The tree should already be updated via notifyEdit() calls
     // We only need to update the content cache for query execution
     std::string content;

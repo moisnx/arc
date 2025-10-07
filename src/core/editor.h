@@ -82,6 +82,7 @@ public:
   void selectAll();
 
   // Undo/Redo
+
   void saveState();
   void undo();
   void redo();
@@ -126,6 +127,9 @@ private:
   std::string clipboard;
 
   // Undo/Redo
+  std::chrono::steady_clock::time_point lastEditTime;
+  static constexpr int UNDO_GROUP_TIMEOUT_MS = 500;
+  bool isUndoRedoing = false; // Add this flag
   std::stack<EditorState> undoStack;
   std::stack<EditorState> redoStack;
   static const size_t MAX_UNDO_LEVELS = 100;

@@ -1054,6 +1054,12 @@ void Editor::insertChar(char ch)
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
     return;
 
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   std::string line = buffer.getLine(cursorLine);
   if (cursorCol > static_cast<int>(line.length()))
     cursorCol = line.length();
@@ -1062,14 +1068,11 @@ void Editor::insertChar(char ch)
 
   size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-  // FIRST: Modify the buffer
   line.insert(cursorCol, 1, ch);
   buffer.replaceLine(cursorLine, line);
 
-  // THEN: Notify Tree-sitter with the complete new content
-  if (syntaxHighlighter)
+  if (syntaxHighlighter && !isUndoRedoing)
   {
-    // Get fresh buffer content
     syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
                                            cursorCol, cursorLine, cursorCol,
                                            cursorLine, cursorCol + 1);
@@ -1079,10 +1082,6 @@ void Editor::insertChar(char ch)
   cursorCol++;
   markModified();
 
-  // REMOVED: Don't call notifyBufferChanged() - we already notified
-  // Tree-sitter notifyBufferChanged();
-
-  // Auto-adjust viewport (unchanged)
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
   int lineNumWidth = std::to_string(buffer.getLineCount()).length();
@@ -1095,21 +1094,20 @@ void Editor::insertChar(char ch)
 
 void Editor::insertNewline()
 {
-  // Calculate position BEFORE split
-  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
-
-  // Notify Tree-sitter BEFORE modifying buffer
-  if (syntaxHighlighter)
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
   {
-    syntaxHighlighter->notifyEdit(
-        byte_pos, 0, 1,        // Inserting newline (1 byte)
-        cursorLine, cursorCol, // Start position
-        cursorLine, cursorCol, // Old end (same as start)
-        cursorLine + 1, 0      // New end (new line created)
-    );
+    saveState();
   }
 
-  // Now modify buffer
+  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+  if (syntaxHighlighter && !isUndoRedoing)
+  {
+    syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
+                                  cursorLine, cursorCol, cursorLine + 1, 0);
+  }
+
   splitLineAtCursor();
   cursorLine++;
   cursorCol = 0;
@@ -1122,8 +1120,7 @@ void Editor::insertNewline()
   viewportLeft = 0;
   markModified();
 
-  // Invalidate affected lines only
-  if (syntaxHighlighter)
+  if (syntaxHighlighter && !isUndoRedoing)
   {
     syntaxHighlighter->invalidateLineRange(cursorLine - 1,
                                            buffer.getLineCount() - 1);
@@ -1132,56 +1129,50 @@ void Editor::insertNewline()
 
 void Editor::deleteChar()
 {
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   std::string line = buffer.getLine(cursorLine);
 
   if (cursorCol < static_cast<int>(line.length()))
   {
-    // Calculate position BEFORE deletion
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-    // Notify Tree-sitter
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(byte_pos, 1, 0,        // Deleting 1 byte
-                                    cursorLine, cursorCol, // Start position
-                                    cursorLine, cursorCol + 1, // Old end
-                                    cursorLine,
-                                    cursorCol // New end (same as start)
-      );
+      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
+                                    cursorLine, cursorCol + 1, cursorLine,
+                                    cursorCol);
     }
 
     line.erase(cursorCol, 1);
     buffer.replaceLine(cursorLine, line);
     markModified();
 
-    // Invalidate only current line
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
       syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
     }
   }
   else if (cursorLine < buffer.getLineCount() - 1)
   {
-    // Joining lines - calculate position at end of current line
     size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
 
-    // Notify Tree-sitter about newline deletion
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
       std::string nextLine = buffer.getLine(cursorLine + 1);
-      syntaxHighlighter->notifyEdit(
-          byte_pos, 1, 0,                      // Deleting newline (1 byte)
-          cursorLine, (uint32_t)line.length(), // Start position
-          cursorLine + 1, 0,                   // Old end (start of next line)
-          cursorLine, (uint32_t)line.length()  // New end (same position)
-      );
+      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
+                                    (uint32_t)line.length(), cursorLine + 1, 0,
+                                    cursorLine, (uint32_t)line.length());
     }
 
     joinLineWithNext();
     markModified();
 
-    // Invalidate from current line to end
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
       syntaxHighlighter->invalidateLineRange(cursorLine,
                                              buffer.getLineCount() - 1);
@@ -1191,22 +1182,22 @@ void Editor::deleteChar()
 
 void Editor::backspace()
 {
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   if (cursorCol > 0)
   {
-    // NEW: Calculate position BEFORE deletion
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
-
     std::string line = buffer.getLine(cursorLine);
 
-    // Notify Tree-sitter about deletion
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(
-          byte_pos, 1, 0,            // Deleting 1 byte
-          cursorLine, cursorCol - 1, // Start position
-          cursorLine, cursorCol,     // Old end
-          cursorLine, cursorCol - 1  // New end (same as start after delete)
-      );
+      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
+                                    cursorLine, cursorCol, cursorLine,
+                                    cursorCol - 1);
     }
 
     line.erase(cursorCol - 1, 1);
@@ -1217,27 +1208,26 @@ void Editor::backspace()
     {
       viewportLeft = cursorCol;
     }
-    if (syntaxHighlighter)
+
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->invalidateLineRange(0, 0);
+      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
     }
+
     markModified();
-    // notifyBufferChanged();
   }
   else if (cursorLine > 0)
   {
     std::string currentLine = buffer.getLine(cursorLine);
     std::string prevLine = buffer.getLine(cursorLine - 1);
 
-    // Calculate byte position for line join
     size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
 
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, // Deleting newline (1 byte)
-                                    cursorLine - 1, (uint32_t)prevLine.length(),
-                                    cursorLine, 0, cursorLine - 1,
-                                    (uint32_t)prevLine.length());
+      syntaxHighlighter->notifyEdit(
+          byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
+          cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
     }
 
     cursorCol = static_cast<int>(prevLine.length());
@@ -1245,79 +1235,75 @@ void Editor::backspace()
 
     buffer.replaceLine(cursorLine, prevLine + currentLine);
     buffer.deleteLine(cursorLine + 1);
-    if (syntaxHighlighter)
+
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->invalidateLineRange(0, 0);
+      syntaxHighlighter->invalidateLineRange(cursorLine,
+                                             buffer.getLineCount() - 1);
     }
+
     markModified();
   }
 }
 
 void Editor::deleteLine()
 {
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   if (buffer.getLineCount() == 1)
   {
-    // Clearing the only line
     std::string line = buffer.getLine(0);
     size_t byte_pos = 0;
 
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(byte_pos, line.length(),
-                                    0,    // Deleting entire line
-                                    0, 0, // Start
-                                    0, (uint32_t)line.length(), // Old end
-                                    0, 0                        // New end
-      );
+      syntaxHighlighter->notifyEdit(byte_pos, line.length(), 0, 0, 0, 0,
+                                    (uint32_t)line.length(), 0, 0);
     }
 
     buffer.replaceLine(0, "");
     cursorCol = 0;
 
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
       syntaxHighlighter->invalidateLineRange(0, 0);
     }
   }
   else
   {
-    // Calculate byte position of line start
     size_t byte_pos = buffer.lineColToPos(cursorLine, 0);
     std::string line = buffer.getLine(cursorLine);
     size_t line_length = line.length();
 
-    // Include newline in deletion if not last line
     bool has_newline = (cursorLine < buffer.getLineCount() - 1);
     size_t delete_bytes = line_length + (has_newline ? 1 : 0);
 
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(
-          byte_pos, delete_bytes, 0, // Deleting line + newline
-          cursorLine, 0,             // Start of line
-          cursorLine + (has_newline ? 1 : 0),
-          has_newline ? 0 : (uint32_t)line_length, // Old end
-          cursorLine, 0                            // New end
-      );
+      syntaxHighlighter->notifyEdit(byte_pos, delete_bytes, 0, cursorLine, 0,
+                                    cursorLine + (has_newline ? 1 : 0),
+                                    has_newline ? 0 : (uint32_t)line_length,
+                                    cursorLine, 0);
     }
 
     buffer.deleteLine(cursorLine);
 
-    // Adjust cursor position
     if (cursorLine >= buffer.getLineCount())
     {
       cursorLine = buffer.getLineCount() - 1;
     }
 
-    // Ensure cursor column is valid
     line = buffer.getLine(cursorLine);
     if (cursorCol > static_cast<int>(line.length()))
     {
       cursorCol = static_cast<int>(line.length());
     }
 
-    // Invalidate from current line to end
-    if (syntaxHighlighter)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
       syntaxHighlighter->invalidateLineRange(cursorLine,
                                              buffer.getLineCount() - 1);
@@ -1333,38 +1319,37 @@ void Editor::deleteSelection()
   if (!hasSelection && !isSelecting)
     return;
 
+  // SAVE STATE BEFORE MODIFICATION
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   auto selection = getNormalizedSelection();
   int startLine = selection.first.first;
   int startCol = selection.first.second;
   int endLine = selection.second.first;
   int endCol = selection.second.second;
 
-  // Calculate byte position and length
   size_t start_byte = buffer.lineColToPos(startLine, startCol);
   size_t end_byte = buffer.lineColToPos(endLine, endCol);
   size_t delete_bytes = end_byte - start_byte;
 
-  // Notify Tree-sitter BEFORE modification
-  if (syntaxHighlighter)
+  if (syntaxHighlighter && !isUndoRedoing)
   {
-    syntaxHighlighter->notifyEdit(start_byte, delete_bytes,
-                                  0,                   // Deleting selection
-                                  startLine, startCol, // Start
-                                  endLine, endCol,     // Old end
-                                  startLine, startCol // New end (back to start)
-    );
+    syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
+                                  startCol, endLine, endCol, startLine,
+                                  startCol);
   }
 
   if (startLine == endLine)
   {
-    // Single line selection
     std::string line = buffer.getLine(startLine);
     line.erase(startCol, endCol - startCol);
     buffer.replaceLine(startLine, line);
   }
   else
   {
-    // Multi-line selection
     std::string firstLine = buffer.getLine(startLine);
     std::string lastLine = buffer.getLine(endLine);
 
@@ -1372,20 +1357,17 @@ void Editor::deleteSelection()
         firstLine.substr(0, startCol) + lastLine.substr(endCol);
     buffer.replaceLine(startLine, newLine);
 
-    // Delete the lines in between
     for (int i = endLine; i > startLine; i--)
     {
       buffer.deleteLine(i);
     }
   }
 
-  // Position cursor at selection start
   updateCursorAndViewport(startLine, startCol);
   clearSelection();
   markModified();
 
-  // Invalidate affected lines
-  if (syntaxHighlighter)
+  if (syntaxHighlighter && !isUndoRedoing)
   {
     syntaxHighlighter->invalidateLineRange(startLine,
                                            buffer.getLineCount() - 1);
@@ -1398,55 +1380,84 @@ void Editor::deleteSelection()
 
 void Editor::saveState()
 {
-  if (isSaving)
-    return; // Skip saving state during file operations
+  if (isSaving || isUndoRedoing)
+    return;
 
-  EditorState state = getCurrentState();
-  undoStack.push(state);
-  limitUndoStack();
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEditTime)
+          .count();
 
-  while (!redoStack.empty())
+  // Only save if enough time has passed since last edit
+  if (elapsed > UNDO_GROUP_TIMEOUT_MS || undoStack.empty())
   {
-    redoStack.pop();
+    EditorState state = getCurrentState();
+    undoStack.push(state);
+    limitUndoStack();
+
+    while (!redoStack.empty())
+    {
+      redoStack.pop();
+    }
   }
+
+  lastEditTime = now;
 }
 
 void Editor::undo()
 {
-  if (!undoStack.empty())
+  if (undoStack.empty())
+    return;
+
+  // Set flag to prevent saveState() and Tree-sitter updates during restore
+  isUndoRedoing = true;
+
+  // Save current state to redo stack
+  redoStack.push(getCurrentState());
+
+  // Get state to restore
+  EditorState state = undoStack.top();
+  undoStack.pop();
+
+  // Restore the state
+  restoreState(state);
+
+  // Full reparse needed after undo
+  if (syntaxHighlighter)
   {
-    redoStack.push(getCurrentState());
-    EditorState state = undoStack.top();
-    undoStack.pop();
-    restoreState(state);
-
-    // Full reparse needed after undo
-    if (syntaxHighlighter)
-    {
-      syntaxHighlighter->bufferChanged(buffer);
-    }
-
-    isModified = true;
+    syntaxHighlighter->bufferChanged(buffer);
   }
+
+  isModified = true;
+  isUndoRedoing = false;
 }
 
 void Editor::redo()
 {
-  if (!redoStack.empty())
+  if (redoStack.empty())
+    return;
+
+  // Set flag to prevent saveState() and Tree-sitter updates during restore
+  isUndoRedoing = true;
+
+  // Save current state to undo stack
+  undoStack.push(getCurrentState());
+
+  // Get state to restore
+  EditorState state = redoStack.top();
+  redoStack.pop();
+
+  // Restore the state
+  restoreState(state);
+
+  // Full reparse needed after redo
+  if (syntaxHighlighter)
   {
-    undoStack.push(getCurrentState());
-    EditorState state = redoStack.top();
-    redoStack.pop();
-    restoreState(state);
-
-    // Full reparse needed after redo
-    if (syntaxHighlighter)
-    {
-      syntaxHighlighter->bufferChanged(buffer);
-    }
-
-    isModified = true;
+    syntaxHighlighter->bufferChanged(buffer);
   }
+
+  isModified = true;
+  isUndoRedoing = false;
 }
 
 EditorState Editor::getCurrentState()
@@ -1682,18 +1693,18 @@ void Editor::cutSelection()
 
 void Editor::pasteFromClipboard()
 {
-  // First try to get from system clipboard
+  // Try to get from system clipboard first
 #ifndef _WIN32
   FILE *pipe = popen("xclip -selection clipboard -o 2>/dev/null || xsel "
                      "--clipboard --output 2>/dev/null",
                      "r");
   if (pipe)
   {
-    char buffer[4096];
+    char buffer_chars[4096];
     std::string result;
-    while (fgets(buffer, sizeof(buffer), pipe))
+    while (fgets(buffer_chars, sizeof(buffer_chars), pipe))
     {
-      result += buffer;
+      result += buffer_chars;
     }
     pclose(pipe);
 
@@ -1707,15 +1718,21 @@ void Editor::pasteFromClipboard()
   if (clipboard.empty())
     return;
 
+  // SAVE STATE BEFORE PASTE (single undo point for entire paste)
+  if (!isUndoRedoing)
+  {
+    saveState();
+  }
+
   // Delete selection if any
   if (hasSelection || isSelecting)
   {
     deleteSelection();
   }
 
-  // Insert clipboard content
-  saveState();
-
+  // Insert clipboard content character by character
+  // Note: Each insertChar/insertNewline will NOT call saveState
+  // because we already saved it above
   for (char ch : clipboard)
   {
     if (ch == '\n')
