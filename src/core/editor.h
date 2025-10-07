@@ -23,6 +23,13 @@ struct EditorState
   int viewportLeft;
 };
 
+enum CursorMode
+{
+  NORMAL,
+  INSERT,
+  VISUAL
+};
+
 class Editor
 {
 public:
@@ -97,6 +104,10 @@ public:
   bool hasSelection = false;
   bool isSelecting = false;
 
+  // Editor cursor
+  void setCursorMode();
+  CursorMode getCursorMode() const { return currentMode; };
+
 private:
   // Core data
   GapBuffer buffer;
@@ -136,6 +147,9 @@ private:
   void restoreState(const EditorState &state);
   void limitUndoStack();
   std::pair<std::pair<int, int>, std::pair<int, int>> getNormalizedSelection();
+
+  // Cursor Style
+  CursorMode currentMode = NORMAL;
 };
 
 #endif // EDITOR_H

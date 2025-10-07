@@ -1753,3 +1753,30 @@ void Editor::initializeViewportHighlighting()
     syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
   }
 }
+
+// Cursor
+void Editor::setCursorMode()
+{
+  switch (currentMode)
+  {
+  case CursorMode::NORMAL:
+    // Block cursor (solid block)
+    printf("\033[2 q");
+    fflush(stdout);
+    break;
+  case CursorMode::INSERT:
+    // Vertical bar cursor (thin lifne like VSCode/modern editors)
+    printf("\033[6 q");
+    fflush(stdout);
+    break;
+  case CursorMode::VISUAL:
+    // Underline cursor for visual mode
+    printf("\033[4 q");
+    fflush(stdout);
+    break;
+  default:
+    printf("\033[6 q");
+    fflush(stdout);
+    break;
+  }
+}

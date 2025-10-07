@@ -1,6 +1,7 @@
 #include "input_handler.h"
 #include <fstream>
 #include <iostream>
+#include <optional>
 
 // PDCursesMod key code compatibility
 #define CTRL(x) ((x) & 0x1f)
@@ -41,9 +42,9 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
   }
 
   // Global shortcuts (Ctrl+S, Ctrl+Z, etc.)
-  if (handleGlobalShortcut(key))
+  if (auto result = handleGlobalShortcut(key))
   {
-    return KeyResult::REDRAW;
+    return *result; // Return whatever KeyResult it gave us
   }
 
   // Movement keys (handles both normal and shift+movement for selection)
@@ -74,50 +75,52 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
   return KeyResult::NOT_HANDLED;
 }
 
-bool InputHandler::handleGlobalShortcut(int key)
+std::optional<InputHandler::KeyResult>
+InputHandler::handleGlobalShortcut(int key)
 {
   switch (key)
   {
   case CTRL('s'):
     editor_.saveFile();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('z'):
     editor_.undo();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('y'):
     editor_.redo();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('q'):
-    // TODO: Check for unsaved changes and prompt
-    if (editor_.hasUnsavedChanges())
-    {
-      // For now, just quit - add confirmation dialog later
-      exit(0);
-    }
-    exit(0);
-    return true;
+    // // TODO: Check for unsaved changes and prompt
+    // if (editor_.hasUnsavedChanges())
+    // {
+    //   // For now, just quit - add confirmation dialog later
+    //   exit(0);
+    // }
+    // exit(0);
+    // return true;
+    return KeyResult::QUIT;
 
   case CTRL('c'):
     editor_.copySelection();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('x'):
     editor_.cutSelection();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('v'):
     editor_.pasteFromClipboard();
-    return true;
+    return KeyResult::REDRAW;
 
   case CTRL('a'):
     editor_.selectAll();
-    return true;
+    return KeyResult::REDRAW;
 
   default:
-    return false;
+    return std::nullopt; // No shortcut handled
   }
 }
 

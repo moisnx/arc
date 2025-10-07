@@ -1,6 +1,7 @@
 #pragma once
 
 #include "src/core/editor.h"
+#include <optional>
 
 #ifdef _WIN32
 #include <curses.h>
@@ -44,7 +45,7 @@ private:
   // Movement and editing
   bool handleMovementKey(int key, bool shift_held);
   bool handleEditingKey(int key);
-  bool handleGlobalShortcut(int key);
+  std::optional<KeyResult> handleGlobalShortcut(int key);
 
   // Utility functions
   bool isPrintableChar(int key) const;
