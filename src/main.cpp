@@ -523,6 +523,11 @@ bool initializeThemes()
   return true;
 }
 
+#ifdef _WIN32
+void disableSignalHandling() {}
+void restoreSignalHandling() {}
+#endif
+
 #ifndef _WIN32
 struct sigaction old_int, old_tstp, old_quit;
 
