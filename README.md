@@ -1,74 +1,78 @@
-# Arc
+<!-- Banner / Logo -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/moisnx/arc/main/.github/assets/logo.png" alt="Arc Editor Logo" width="120" height="120"/>
+</p>
 
-A modern terminal-based text editor with Tree-sitter powered syntax highlighting, designed for simplicity and efficiency. Arc combines the accessibility of nano with powerful features and a clean interface.
+<h1 align="center">Arc Editor</h1>
+<p align="center"><b>Simple. Modern. Efficient.</b></p>
+<p align="center">
+  <em>A modern terminal-based text editor with Tree-sitter powered syntax highlighting.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/moisnx/arc/actions"><img src="https://img.shields.io/github/actions/workflow/status/moisnx/arc/ci.yml?branch=main&style=flat-square" alt="Build Status"></a>
+  <a href="https://github.com/moisnx/arc/blob/main/LICENSE"><img src="https://img.shields.io/github/license/moisnx/arc?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/editor%20type-terminal-informational?style=flat-square">
+</p>
+
+---
+
+> **Arc** combines the accessibility of nano with powerful features and a clean interface.
+
+---
 
 ## ✨ Features
 
-- **Intuitive Interface**: Clean, minimal design focused on your content with smart viewport management
-- **Advanced Syntax Highlighting**: Tree-sitter powered highlighting for accurate, AST-based syntax coloring
-- **Modern Editing**: Gap buffer implementation for efficient text operations with unlimited undo/redo
-- **Smart Selection**: Visual selection mode with copy, cut, and paste operations
-- **Live Configuration**: Hot-reload themes and settings without restarting
-- **Cross-Platform**: Runs on Windows (PDCurses), Linux, and macOS (NCurses)
-- **Lightweight**: Fast startup and minimal resource usage
-- **Customizable**: Multiple color themes and configurable editor behavior
+- **Intuitive Interface**: Minimal, focused on your content with smart viewport management
+- **Advanced Syntax Highlighting**: Tree-sitter powered, accurate AST-based coloring
+- **Modern Editing**: Gap buffer for efficient text ops, unlimited undo/redo
+- **Smart Selection**: Visual selection with copy, cut, paste
+- **Live Configuration**: Hot-reload themes and settings
+- **Cross-Platform**: Windows (PDCurses), Linux, macOS (NCurses)
+- **Lightweight**: Fast startup, minimal resource usage
+- **Customizable**: Multiple color themes, configurable behavior
 
-### Supported Languages
+---
 
-Built-in Tree-sitter support for:
-- **C/C++** - Full syntax highlighting with semantic tokens
-- **Python** - Complete Python 3 support
-- **Rust** - Modern Rust syntax
-- **JavaScript/TypeScript** - Including JSX/TSX variants
-- **Markdown** - With inline code highlighting
-- **Go** - Standard Go syntax
-- **Zig** - Native Zig support
+## 🖥️ Demo
 
-## 🚀 Quick Start
+<p align="center">
+  <img src="https://raw.githubusercontent.com/moisnx/arc/main/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="700"/>
+</p>
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-**All Platforms:**
-- CMake 3.16+
-- C++20 compatible compiler
-- Git (for submodules)
-
-**Platform-Specific:**
-
-| Platform | Requirements |
-|----------|-------------|
-| **Linux** | `build-essential cmake libncurses5-dev libyaml-cpp-dev` |
-| **macOS** | `cmake ncurses yaml-cpp` (via Homebrew) |
-| **Windows** | Visual Studio 2019+ with vcpkg |
+- **All Platforms:** CMake 3.16+, C++20 compiler, Git (for submodules)
+- **Linux:** `build-essential cmake libncurses5-dev libyaml-cpp-dev`
+- **macOS:** `cmake ncurses yaml-cpp` (via Homebrew)
+- **Windows:** Visual Studio 2019+ with vcpkg
 
 ### Installation
 
-#### Linux/Ubuntu
+<details>
+  <summary><b>Linux/Ubuntu</b></summary>
 
 ```bash
-# Install dependencies
 sudo apt install build-essential cmake libncurses5-dev libyaml-cpp-dev
-
-# Clone with submodules
 git clone --recursive https://github.com/moisnx/arc.git
 cd arc
-
-# Build
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
-
-# Run
 ./arc
 ```
+</details>
 
-#### macOS
+<details>
+  <summary><b>macOS</b></summary>
 
 ```bash
-# Install dependencies
 brew install cmake ncurses yaml-cpp
-
-# Clone and build
 git clone --recursive https://github.com/moisnx/arc.git
 cd arc
 mkdir build && cd build
@@ -76,20 +80,18 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(sysctl -n hw.ncpu)
 ./arc
 ```
+</details>
 
-#### Windows
+<details>
+  <summary><b>Windows</b></summary>
 
 ```powershell
-# Install vcpkg (one-time setup)
 git clone https://github.com/microsoft/vcpkg.git C:\tools\vcpkg
 cd C:\tools\vcpkg
 .\bootstrap-vcpkg.bat
 .\vcpkg integrate install
-
-# Install dependencies (static linking recommended)
 .\vcpkg install pdcurses:x64-windows-static yaml-cpp:x64-windows-static
 
-# Clone and build
 git clone --recursive https://github.com/moisnx/arc.git
 cd arc
 mkdir build
@@ -97,16 +99,27 @@ cd build
 cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake `
          -DVCPKG_TARGET_TRIPLET=x64-windows-static
 cmake --build . --config Release
-
-# Run
 .\Release\arc.exe
 ```
+</details>
 
 > **Note:** Forgot `--recursive`? Run `git submodule update --init --recursive`
 
-## 🎯 Usage
+---
 
-### Basic Commands
+## 📂 Supported Languages
+
+- **C/C++**
+- **Python**
+- **Rust**
+- **JavaScript/TypeScript** (incl. JSX/TSX)
+- **Markdown** (with inline code)
+- **Go**
+- **Zig**
+
+---
+
+## 🎮 Usage
 
 ```bash
 # Open a file
@@ -121,83 +134,74 @@ arc --help
 
 ### Key Bindings
 
+<details>
+  <summary><b>Show Key Bindings</b></summary>
+
 #### File Operations
-| Key | Action |
-|-----|--------|
-| `Ctrl+S` | Save file |
-| `Ctrl+Q` | Quit (with unsaved changes prompt) |
+| Key      | Action                              |
+|----------|-------------------------------------|
+| Ctrl+S   | Save file                           |
+| Ctrl+Q   | Quit (with unsaved changes prompt)  |
 
 #### Editing
-| Key | Action |
-|-----|--------|
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Backspace` | Delete character before cursor |
-| `Delete` | Delete character at cursor |
-| `Enter` | Insert new line |
-| `Tab` | Insert 4 spaces |
+| Key        | Action                        |
+|------------|------------------------------|
+| Ctrl+Z     | Undo                         |
+| Ctrl+Y     | Redo                         |
+| Backspace  | Delete char before cursor    |
+| Delete     | Delete char at cursor        |
+| Enter      | Insert new line              |
+| Tab        | Insert 4 spaces              |
 
 #### Navigation
-| Key | Action |
-|-----|--------|
-| `Arrow Keys` | Move cursor |
-| `Home` | Move to line start |
-| `End` | Move to line end |
-| `Page Up/Down` | Scroll viewport |
+| Key         | Action                 |
+|-------------|-----------------------|
+| Arrow Keys  | Move cursor           |
+| Home/End    | Line start/end        |
+| PgUp/PgDn   | Scroll viewport       |
 
 #### Selection
-| Key | Action |
-|-----|--------|
-| `Shift+Arrows` | Extend selection |
-| `Ctrl+A` | Select all |
-| `Ctrl+C` | Copy selection |
-| `Ctrl+X` | Cut selection |
-| `Ctrl+V` | Paste from clipboard |
-| `Esc` | Clear selection |
+| Key           | Action              |
+|---------------|---------------------|
+| Shift+Arrows  | Extend selection    |
+| Ctrl+A        | Select all          |
+| Ctrl+C        | Copy selection      |
+| Ctrl+X        | Cut selection       |
+| Ctrl+V        | Paste from clipboard|
+| Esc           | Clear selection     |
 
-### Configuration
+</details>
 
-Arc automatically creates configuration files on first run:
+---
 
-**Linux/macOS:** `~/.config/arceditor/`  
-**Windows:** `%APPDATA%\arceditor\`
+## ⚙️ Configuration
 
-#### Configuration Files
+Arc auto-creates config files on first run:
 
-```
-~/.config/arceditor/
-├── config.yaml          # Editor settings
-├── keybinds.conf        # Custom keybindings (future)
-└── themes/
-    ├── default.theme
-    ├── gruvbox_dark.theme
-    ├── monokai.theme
-    └── ...
-```
+- Linux/macOS: `~/.config/arceditor/`
+- Windows: `%APPDATA%\arceditor\`
 
-#### config.yaml
+#### Example: `config.yaml`
 
 ```yaml
 appearance:
-  theme: default           # Theme name (without .theme extension)
+  theme: default
 
 editor:
-  tab_size: 4             # Spaces per tab
-  line_numbers: true      # Show line numbers
-  cursor_style: auto      # auto, block, bar, underline
+  tab_size: 4
+  line_numbers: true
+  cursor_style: auto
 
 syntax:
-  highlighting: viewport  # none, viewport, full
+  highlighting: viewport
 ```
-
-**Syntax Modes:**
-- `none` - Disable highlighting (fastest)
-- `viewport` - Highlight visible lines only (recommended, default)
-- `full` - Highlight entire file (slower for large files)
 
 #### Themes
 
-Arc includes 14 built-in themes. Create custom themes in `.config/arceditor/themes/`:
+- 14 built-in themes.
+- Add custom themes in `.config/arceditor/themes/`.
+- Supports hex, 256-color, and named colors.
+- **Hot-reload:** Changes are auto-reloaded.
 
 ```yaml
 # mytheme.theme
@@ -210,195 +214,75 @@ comment: "#6c7086"
 # ... see existing themes for all options
 ```
 
-Themes support:
-- Hex colors (`#rrggbb`)
-- 256-color codes (`color_123`)
-- Standard terminal colors (`red`, `blue`, etc.)
-
-**Hot-reload:** Changes to themes and `config.yaml` are detected automatically while Arc is running.
+---
 
 ## 🛠️ Development
 
-### Project Structure
+<details>
+  <summary><b>Project Structure</b></summary>
 
 ```
 arc/
 ├── src/
-│   ├── core/                  # Core editor logic
-│   │   ├── editor.{cpp,h}    # Main editor class
-│   │   ├── buffer.{cpp,h}    # Gap buffer implementation
-│   │   └── config_manager.{cpp,h}  # Configuration system
-│   ├── features/              # Advanced features
-│   │   ├── syntax_highlighter.{cpp,h}  # Tree-sitter integration
-│   │   └── syntax_config_loader.{cpp,h} # Language config
-│   ├── ui/                    # User interface
-│   │   ├── renderer.{cpp,h}  # Display logic
-│   │   ├── input_handler.{cpp,h}  # Key handling
-│   │   └── style_manager.{cpp,h}  # Theme system
+│   ├── core/
+│   ├── features/
+│   ├── ui/
 │   └── main.cpp
-├── deps/                      # Git submodules
-│   ├── tree-sitter-core/
-│   ├── tree-sitter-python/
-│   ├── tree-sitter-c/
-│   ├── tree-sitter-cpp/
-│   ├── tree-sitter-rust/
-│   ├── tree-sitter-javascript/
-│   ├── tree-sitter-typescript/
-│   ├── tree-sitter-markdown/
-│   ├── tree-sitter-go/
-│   ├── tree-sitter-zig/
-│   └── efsw/                  # File watcher
+├── deps/                  # Git submodules: tree-sitter, efsw, etc.
 ├── treesitter/
-│   ├── languages.yaml         # Language registry
-│   └── queries/               # Syntax query files
-├── .config/arceditor/         # Default configs
+│   ├── languages.yaml
+│   └── queries/
+├── .config/arceditor/
 └── CMakeLists.txt
 ```
+</details>
 
-### Building from Source
+See [build.md](build.md) for advanced setup and troubleshooting.
 
-See [build.md](build.md) for detailed instructions including:
-- Platform-specific setup
-- Dependency installation
-- CMake configuration options
-- Troubleshooting common issues
+---
 
-Quick development build:
-
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-cmake --build .
-```
-
-### Adding New Languages
-
-1. Add Tree-sitter grammar as submodule in `deps/`
-2. Update `treesitter/languages.yaml`:
-
-```yaml
-languages:
-  mylang:
-    name: "My Language"
-    extensions: ["ml", "mylang"]
-    builtin: true
-    parser_name: "mylang"
-    queries: ["treesitter/queries/mylang/highlights.scm"]
-```
-
-3. Add query file with highlight rules
-4. Rebuild to link parser
-
-### Contributing
-
-We welcome contributions! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Follow the commit message format in `.gitmessage`
-4. Run tests before submitting
-5. Open a Pull Request
-
-See [.gitmessage](.gitmessage) for commit conventions.
-
-## 🎨 Customization
-
-### Creating Themes
-
-Themes are YAML files defining color schemes. All fields support:
-- Hex colors: `"#rrggbb"`
-- Named colors: `"red"`, `"bright_blue"`, etc.
-- 256-color codes: `"color_123"`
-
-```yaml
-name: "My Theme"
-
-# UI Elements
-background: "#1e1e2e"
-foreground: "#cdd6f4"
-cursor: "#f5e0dc"
-selection: "#45475a"
-line_numbers: "#6c7086"
-status_bar_bg: "#313244"
-status_bar_fg: "#cdd6f4"
-
-# Syntax Categories
-keyword: "#cba6f7"
-string_literal: "#a6e3a1"
-number: "#fab387"
-comment: "#6c7086"
-function_name: "#89b4fa"
-variable: "#cdd6f4"
-type: "#f9e2af"
-operator: "#94e2d5"
-
-# Markup (Markdown)
-markup_heading: "#cba6f7"
-markup_bold: "#f9e2af"
-markup_italic: "#94e2d5"
-markup_code: "#a6e3a1"
-```
-
-### Extending Syntax Highlighting
-
-Query files use Tree-sitter's S-expression format:
-
-```scheme
-; treesitter/queries/mylang/highlights.scm
-(function_definition
-  name: (identifier) @function)
-
-(string_literal) @string
-
-(comment) @comment
-```
-
-Supported capture names map to theme colors (see `style_manager.h`).
-
-## 🐛 Known Issues
-
-- **Windows:** Minor cursor positioning differences with PDCurses vs NCurses
-- **All Platforms:** Very large files (>10MB) may experience slower highlighting with `syntax: full` mode
-
-## 📋 Roadmap
+## 📈 Roadmap
 
 - [ ] Multiple file tabs/buffers
-- [ ] Advanced search and replace (regex support)
-- [ ] Git integration (diff view, blame annotations)
-- [ ] LSP support for code intelligence
+- [ ] Advanced search/replace (regex)
+- [ ] Git integration (diff, blame)
+- [ ] LSP support
 - [ ] Plugin system
 - [ ] Mouse support enhancements
 - [ ] Split panes
 - [ ] Configurable keybindings
 
-## 📊 Performance
+---
 
-Typical startup times:
-- **Empty file:** <50ms
-- **1000 line file:** ~100ms
-- **10,000 line file:** ~300ms (viewport mode)
+## 👥 Community & Contributing
 
-Memory usage: ~5-15MB depending on file size and highlighting mode.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [Tree-sitter](https://tree-sitter.github.io/) - Incremental parsing library
-- [NCurses](https://invisible-island.net/ncurses/) - Terminal UI library
-- [PDCurses](https://github.com/Bill-Gray/PDCursesMod) - Cross-platform curses implementation
-- [EFSW](https://github.com/SpartanJ/efsw) - File system watcher
-- [yaml-cpp](https://github.com/jbeder/yaml-cpp) - YAML parser
-- Inspired by nano, micro, and helix editors
-
-## 📞 Support & Feedback
+💡 **Contributions welcome!**  
+1. Fork & create a feature branch
+2. Follow [.gitmessage](.gitmessage) for commits
+3. Run tests before submitting
+4. Open a PR
 
 - **Issues:** [GitHub Issues](https://github.com/moisnx/arc/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/moisnx/arc/discussions)
-- **Documentation:** See [build.md](build.md) and [quickstart.md](quickstart.md)
+- **Docs:** [build.md](build.md) | [quickstart.md](quickstart.md)
 
 ---
 
-**Arc** - Simple. Modern. Efficient.
+## 📝 License
+
+MIT License – see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Tree-sitter](https://tree-sitter.github.io/)
+- [NCurses](https://invisible-island.net/ncurses/)
+- [PDCurses](https://github.com/Bill-Gray/PDCursesMod)
+- [EFSW](https://github.com/SpartanJ/efsw)
+- [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+- Inspired by nano, micro, and helix editors
+
+---
+
+<p align="center"><b>Arc Editor</b> – Simple. Modern. Efficient.</p>
