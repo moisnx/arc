@@ -19,9 +19,9 @@
 #include <unistd.h>
 #endif
 
-void disableXonXoff();
-void disableSignalHandling();
-void restoreSignalHandling();
+// void disableXonXoff();
+// void disableSignalHandling();
+// void restoreSignalHandling();
 bool initializeNcurses();
 bool initializeThemes();
 void setupMouse();
@@ -72,10 +72,10 @@ BenchmarkResult runStartupInteractiveBenchmark(const std::string &filename,
   auto start = std::chrono::high_resolution_clock::now();
 
   // Phase 1: Initialize ncurses
-  disableXonXoff();
-#ifndef _win32
-  disableSignalHandling();
-#endif
+  //   disableXonXoff();
+  // #ifndef _win32
+  //   disableSignalHandling();
+  // #endif
   if (!initializeNcurses())
   {
     throw std::runtime_error("ncurses init failed");
@@ -234,10 +234,10 @@ int main(int argc, char *argv[])
     auto start = std::chrono::high_resolution_clock::now();
 
     // Initialize ncurses (users see this cost)
-    disableXonXoff();
-#ifndef _win32
-    disableSignalHandling();
-#endif
+    //     disableXonXoff();
+    // #ifndef _win32
+    //     disableSignalHandling();
+    // #endif
     if (!initializeNcurses())
       return 1;
     if (!initializeThemes())
@@ -302,17 +302,20 @@ int main(int argc, char *argv[])
 
   // Create editor
   Editor editor(highlighterPtr);
+  editor.setDeltaUndoEnabled(true);
 
+  // Initialize delta group (even if disabled)
+  editor.beginDeltaGroup();
   if (!editor.loadFile(filename))
   {
     std::cerr << "Warning: Could not open file " << filename << std::endl;
   }
 
   // Initialize ncurses
-  disableXonXoff();
-#ifndef _win32
-  disableSignalHandling();
-#endif
+  //   disableXonXoff();
+  // #ifndef _win32
+  //   disableSignalHandling();
+  // #endif
   if (!initializeNcurses())
   {
     return 1;
@@ -413,6 +416,7 @@ int main(int argc, char *argv[])
       curs_set(1);             // Show immediately
       break;
     case InputHandler::KeyResult::NOT_HANDLED:
+      //   std::cerr << "Input not handled" << std::endl;
       break;
     }
     // if (result != InputHandler::KeyResult::NOT_HANDLED)
@@ -426,27 +430,10 @@ int main(int argc, char *argv[])
   attrset(A_NORMAL);
   curs_set(1);
   endwin();
-#ifndef _win32
-  restoreSignalHandling();
-#endif
+  // #ifndef _win32
+  //   restoreSignalHandling();
+  // #endif
   return 0;
-}
-
-void disableXonXoff()
-{
-#ifndef _WIN32
-  struct termios tty;
-  if (tcgetattr(STDIN_FILENO, &tty) == 0)
-  {
-    tty.c_iflag &= ~(IXON | IXOFF | IXANY);
-    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
-  }
-  else
-  {
-    std::cerr << "Warning: Could not disable XON/XOFF flow control"
-              << std::endl;
-  }
-#endif
 }
 
 bool initializeNcurses()
@@ -522,33 +509,6 @@ bool initializeThemes()
   // NOTE: Initial theme load logic removed from here
   return true;
 }
-
-#ifdef _WIN32
-void disableSignalHandling() {}
-void restoreSignalHandling() {}
-#endif
-
-#ifndef _WIN32
-struct sigaction old_int, old_tstp, old_quit;
-
-void disableSignalHandling()
-{
-  struct sigaction sa;
-  sa.sa_handler = SIG_IGN;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
-
-  sigaction(SIGINT, &sa, &old_int);   // Ignore Ctrl+C
-  sigaction(SIGTSTP, &sa, &old_tstp); // Ignore Ctrl+Z
-  sigaction(SIGQUIT, &sa, &old_quit); // Ignore Ctrl+
-}
-void restoreSignalHandling()
-{
-  sigaction(SIGINT, &old_int, NULL);
-  sigaction(SIGTSTP, &old_tstp, NULL);
-  sigaction(SIGQUIT, &old_quit, NULL);
-}
-#endif
 
 void flushInputQueue()
 {

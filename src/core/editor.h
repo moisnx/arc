@@ -11,6 +11,8 @@
 #endif
 
 #include "buffer.h"
+#include "editor_delta.h"
+#include "editor_validation.h"
 #include "src/features/syntax_highlighter.h"
 
 // Undo/Redo system
@@ -109,6 +111,21 @@ public:
   void setCursorMode();
   CursorMode getCursorMode() const { return currentMode; };
 
+  // Validation
+  EditorSnapshot captureSnapshot() const;
+  ValidationResult validateState(const std::string &context) const;
+  std::string compareSnapshots(const EditorSnapshot &before,
+                               const EditorSnapshot &after) const;
+
+  // Delta undo configuration
+  void beginDeltaGroup();
+  void setDeltaUndoEnabled(bool enabled) { useDeltaUndo_ = enabled; }
+  bool isDeltaUndoEnabled() const { return useDeltaUndo_; }
+
+  // Debug/stats
+  size_t getUndoMemoryUsage() const;
+  size_t getRedoMemoryUsage() const;
+
 private:
   // Core data
   GapBuffer buffer;
@@ -116,6 +133,23 @@ private:
   SyntaxHighlighter *syntaxHighlighter;
   bool isSaving = false;
 
+  // Delta
+  bool useDeltaUndo_ = false; // Feature flag - start disabled!
+  std::stack<DeltaGroup> deltaUndoStack_;
+  std::stack<DeltaGroup> deltaRedoStack_;
+  DeltaGroup currentDeltaGroup_; // Accumulates deltas for grouping
+
+  // Delta operations
+  void addDelta(const EditDelta &delta);
+  void commitDeltaGroup();
+  void applyDeltaForward(const EditDelta &delta);
+  void applyDeltaReverse(const EditDelta &delta);
+  // Helper to create delta from current operation
+  EditDelta createDeltaForInsertChar(char ch);
+  EditDelta createDeltaForDeleteChar();
+  EditDelta createDeltaForBackspace();
+  EditDelta createDeltaForNewline();
+  EditDelta createDeltaForDeleteSelection();
   // Viewport and cursor
   int viewportTop = 0;
   int viewportLeft = 0;
@@ -128,7 +162,7 @@ private:
 
   // Undo/Redo
   std::chrono::steady_clock::time_point lastEditTime;
-  static constexpr int UNDO_GROUP_TIMEOUT_MS = 500;
+  static constexpr int UNDO_GROUP_TIMEOUT_MS = 2000;
   bool isUndoRedoing = false; // Add this flag
   std::stack<EditorState> undoStack;
   std::stack<EditorState> redoStack;
@@ -151,6 +185,9 @@ private:
   void restoreState(const EditorState &state);
   void limitUndoStack();
   std::pair<std::pair<int, int>, std::pair<int, int>> getNormalizedSelection();
+
+  void notifyTreeSitterEdit(const EditDelta &delta, bool isReverse);
+  void optimizedLineInvalidation(int startLine, int endLine);
 
   // Cursor Style
   CursorMode currentMode = NORMAL;

@@ -127,6 +127,30 @@ bool GapBuffer::saveToFile(const std::string &filename) const
   return file.good();
 }
 
+void GapBuffer::loadFromString(const std::string &content)
+{
+  clear();
+
+  if (content.empty())
+  {
+    insertChar(0, '\n');
+    return;
+  }
+
+  // Resize buffer to hold content + gap
+  size_t content_size = content.length();
+  buffer.resize(content_size + DEFAULT_GAP_SIZE);
+
+  // Copy content directly after gap
+  std::memcpy(buffer.data() + DEFAULT_GAP_SIZE, content.data(), content_size);
+
+  gapStart = 0;
+  gapSize = DEFAULT_GAP_SIZE;
+
+  // Mark index as dirty - will rebuild on first access
+  invalidateLineIndex();
+}
+
 void GapBuffer::clear()
 {
   buffer.clear();
@@ -162,7 +186,7 @@ std::string GapBuffer::getLine(int lineNum) const
 
   if (lineNum + 1 < static_cast<int>(lineIndex.size()))
   {
-    lineEnd = lineIndex[lineNum + 1] - 1; // -1 to exclude the newline
+    lineEnd = lineIndex[lineNum + 1] - 1; // -1 to exclude newline
   }
   else
   {
@@ -370,23 +394,43 @@ void GapBuffer::replaceLine(int lineNum, const std::string &newLine)
   if (lineNum < 0 || lineNum >= getLineCount())
     return;
 
-  // Get current state before any modifications
   size_t lineStart = lineColToPos(lineNum, 0);
-  size_t lineLength = getLineLength(lineNum);
+  size_t oldLineLength = getLineLength(lineNum);
 
-  // Move gap to line start
+  // Check if the new line contains newlines
+  bool newLineHasNewlines = (newLine.find('\n') != std::string::npos);
+
+  if (newLineHasNewlines)
+  {
+    // Complex case: line split - must rebuild index
+    moveGapTo(lineStart);
+    if (gapSize < newLine.length())
+    {
+      expandGap(newLine.length());
+    }
+
+    gapSize += oldLineLength;
+    for (char c : newLine)
+    {
+      buffer[gapStart] = c;
+      gapStart++;
+      gapSize--;
+    }
+
+    invalidateLineIndex();
+    return;
+  }
+
+  // Simple case: Same line, just different text
   moveGapTo(lineStart);
 
-  // Expand gap if needed
   if (gapSize < newLine.length())
   {
     expandGap(newLine.length());
   }
 
-  // Replace the line content directly
-  gapSize += lineLength; // "Delete" old content by expanding gap
+  gapSize += oldLineLength;
 
-  // Insert new content
   for (char c : newLine)
   {
     buffer[gapStart] = c;
@@ -394,8 +438,26 @@ void GapBuffer::replaceLine(int lineNum, const std::string &newLine)
     gapSize--;
   }
 
-  // Mark line index as dirty only once
-  invalidateLineIndex();
+  // CRITICAL OPTIMIZATION: Update line index incrementally
+  if (!lineIndexDirty && lineNum + 1 < static_cast<int>(lineIndex.size()))
+  {
+    // Adjust all subsequent line offsets by the length difference
+    int lengthDiff =
+        static_cast<int>(newLine.length()) - static_cast<int>(oldLineLength);
+
+    if (lengthDiff != 0)
+    {
+      for (size_t i = lineNum + 1; i < lineIndex.size(); ++i)
+      {
+        lineIndex[i] += lengthDiff;
+      }
+    }
+    // Line index is now up-to-date, no need to invalidate!
+  }
+  else if (lineIndexDirty)
+  {
+    // Already dirty, no change needed
+  }
 }
 
 // std::string GapBuffer::getText() const
@@ -419,34 +481,28 @@ void GapBuffer::replaceLine(int lineNum, const std::string &newLine)
 // }
 
 // In buffer.cpp, inside GapBuffer::getText()
+
 std::string GapBuffer::getText() const
 {
-  // The size of the final string *must* match the size reported by textSize()
+  // Build line index ONCE if needed (for future getLine() calls)
+  if (lineIndexDirty)
+  {
+    rebuildLineIndex();
+  }
+
+  // The size of the final string *must* match textSize()
   size_t text_size = textSize();
   std::string result;
-  result.reserve(text_size); // Reserve the exact final capacity
+  result.reserve(text_size);
 
-  // 1. Append the first half (Text before the gap)
-  // The length of the first half is gapStart
+  // Append text before gap
   result.append(buffer.data(), gapStart);
 
-  // 2. Append the second half (Text after the gap)
-  // The length of the second half is text_size - gapStart
+  // Append text after gap
   size_t afterGapLength = text_size - gapStart;
-
-  // Check for a scenario where afterGapLength might wrap (though highly
-  // unlikely with your logic)
   if (afterGapLength > 0 && gapEnd() < buffer.size())
   {
     result.append(buffer.data() + gapEnd(), afterGapLength);
-  }
-
-  // Safety Check: If the buffer was empty, or if logic failed, ensure the
-  // result matches the source of truth
-  if (result.size() != text_size)
-  {
-    // This should not happen, but if it does, it's a critical bug.
-    // For now, assume logic is correct and rely on the math.
   }
 
   return result;

@@ -80,6 +80,10 @@ public:
   void parseViewportOnly(const GapBuffer &buffer, int targetLine);
   void scheduleBackgroundParse(const GapBuffer &buffer);
 
+  void forceFullReparse(const GapBuffer &buffer);
+  void invalidateFromLine(int startLine);
+  void clearAllCache();
+
 private:
   // Configuration management
   std::unique_ptr<SyntaxConfigLoader> config_loader_;
@@ -97,7 +101,9 @@ private:
 
   // Markdown state tracking
   std::map<int, MarkdownState> line_states_;
-  mutable std::unordered_map<int, std::vector<ColorSpan>> line_cache_;
+  mutable std::map<int, std::vector<ColorSpan>>
+      line_cache_; // Changed from unordered_map
+
   mutable std::string last_buffer_hash_;
   mutable std::unordered_map<int, bool> line_highlight_pending_;
   mutable std::unordered_set<int> priority_lines_;

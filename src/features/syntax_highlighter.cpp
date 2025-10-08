@@ -354,43 +354,49 @@ void SyntaxHighlighter::updateTreeAfterEdit(
   }
 #endif
 }
+
 void SyntaxHighlighter::bufferChanged(const GapBuffer &buffer)
 {
 #ifdef TREE_SITTER_ENABLED
-  // CRITICAL: Only do full reparse if we don't have a tree yet
-  // Incremental edits via notifyEdit() should handle most updates
-  if (parser_ && current_ts_language_ && !tree_)
+  if (!parser_ || !current_ts_language_)
+    return;
+
+  // REMOVED the "optimization" that was skipping reparsing
+  // If current_buffer_content_ is empty, we MUST reparse
+
+  if (current_buffer_content_.empty())
   {
-    // std::cerr << "DEBUG: Full reparse - no tree exists\n";
+    // Content was cleared - this signals we need full reparse
     updateTree(buffer);
   }
-  else if (tree_)
+  else if (!tree_)
   {
-    // std::cerr
-    //     << "DEBUG: Skipping reparse - tree exists, using incremental
-    //     edits\n";
-    // The tree should already be updated via notifyEdit() calls
-    // We only need to update the content cache for query execution
-    std::string content;
-    int lineCount = buffer.getLineCount();
-    for (int i = 0; i < lineCount; i++)
-    {
-      if (i > 0)
-        content += "\n";
-      content += buffer.getLine(i);
-    }
-    current_buffer_content_ = content;
+    // No tree exists - need initial parse
+    updateTree(buffer);
   }
+  // If tree exists AND content is valid, incremental edits should have
+  // already updated it via notifyEdit()
 #endif
 
-  // Update markdown state if needed
   if (currentLanguage == "Markdown")
   {
     updateMarkdownState(buffer);
   }
+}
 
-  // CRITICAL: DON'T clear line_cache_ here
-  // Cache should only be cleared by invalidateLineRange()
+void SyntaxHighlighter::invalidateFromLine(int startLine)
+{
+  // This is for structural changes (insert/delete lines)
+  // Clear only lines >= startLine, but do it efficiently
+
+  auto it = line_cache_.lower_bound(startLine);
+  if (it != line_cache_.end())
+  {
+    line_cache_.erase(it, line_cache_.end());
+  }
+
+  // Don't clear content cache unless change is massive
+  // Let incremental edits handle the tree updates
 }
 
 #ifdef TREE_SITTER_ENABLED
@@ -589,22 +595,38 @@ void SyntaxHighlighter::notifyEdit(size_t byte_pos, size_t old_byte_len,
 
 void SyntaxHighlighter::invalidateLineRange(int startLine, int endLine)
 {
-  // std::cerr << "DEBUG: Invalidating lines " << startLine << " to " << endLine
-  //           << "\n";
+  // ALWAYS clear from startLine onwards for structural changes
+  // The "optimization" of only clearing > 5 lines was causing the bug
 
-  // Only clear cache for affected lines
-  for (int i = startLine; i <= endLine; ++i)
+  auto it = line_cache_.begin();
+  while (it != line_cache_.end())
   {
-    line_cache_.erase(i);
+    if (it->first >= startLine)
+    {
+      it = line_cache_.erase(it);
+    }
+    else
+    {
+      ++it;
+    }
   }
 
-  // If we're invalidating many lines, trigger a reparse on next display
-  if (endLine - startLine > 50)
+  // Also clear markdown states from this line onwards
+  auto state_it = line_states_.begin();
+  while (state_it != line_states_.end())
   {
-    // std::cerr << "DEBUG: Large invalidation, clearing tree for reparse\n";
-    // This forces a full reparse on next getHighlightSpans call
-    current_buffer_content_.clear();
+    if (state_it->first >= startLine)
+    {
+      state_it = line_states_.erase(state_it);
+    }
+    else
+    {
+      ++state_it;
+    }
   }
+
+  // Signal tree needs rebuild
+  current_buffer_content_.clear();
 }
 
 void SyntaxHighlighter::updateTree(const GapBuffer &buffer)
@@ -1141,4 +1163,82 @@ void SyntaxHighlighter::scheduleBackgroundParse(const GapBuffer &buffer)
 
   parse_thread_.detach();
 #endif
+}
+
+void SyntaxHighlighter::forceFullReparse(const GapBuffer &buffer)
+{
+#ifdef TREE_SITTER_ENABLED
+  if (!parser_ || !current_ts_language_)
+    return;
+
+  std::lock_guard<std::mutex> lock(tree_mutex_);
+
+  // Build fresh content
+  std::string content;
+  int lineCount = buffer.getLineCount();
+
+  // Pre-allocate to avoid reallocations
+  size_t estimated_size = lineCount * 50; // Rough estimate
+  content.reserve(estimated_size);
+
+  for (int i = 0; i < lineCount; i++)
+  {
+    if (i > 0)
+      content += "\n";
+    content += buffer.getLine(i);
+  }
+
+  if (content.empty())
+  {
+    std::cerr << "WARNING: Empty buffer in forceFullReparse\n";
+    return;
+  }
+
+  // OPTIMIZATION: Use the old tree as a reference for faster re-parsing
+  TSTree *old_tree = tree_;
+  tree_ = ts_parser_parse_string(parser_, old_tree, content.c_str(),
+                                 content.length());
+
+  if (tree_)
+  {
+    current_buffer_content_ = std::move(content); // Move instead of copy
+    is_full_parse_ = true;
+
+    // Delete old tree AFTER successful parse
+    if (old_tree)
+      ts_tree_delete(old_tree);
+  }
+  else
+  {
+    std::cerr << "ERROR: Reparse failed, keeping old tree\n";
+    tree_ = old_tree; // Restore old tree
+    return;
+  }
+#endif
+
+  // Clear cache ONLY, don't rebuild markdown state unless necessary
+  line_cache_.clear();
+
+  if (currentLanguage == "Markdown")
+  {
+    updateMarkdownState(buffer);
+  }
+}
+
+void SyntaxHighlighter::clearAllCache()
+{
+  // Clear ALL cached line highlighting
+  line_cache_.clear();
+
+  // Clear line states (for Markdown)
+  line_states_.clear();
+
+  // Clear priority lines
+  priority_lines_.clear();
+
+  // CRITICAL: Force tree-sitter content to be marked as stale
+  current_buffer_content_.clear();
+
+  // Mark that we need a full reparse
+  is_full_parse_ = false;
 }

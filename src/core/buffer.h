@@ -11,6 +11,7 @@ public:
   // Constructor
   GapBuffer();
   explicit GapBuffer(const std::string &initialText);
+  void loadFromString(const std::string &content);
 
   // File operations
   bool loadFromFile(const std::string &filename);
@@ -45,6 +46,7 @@ public:
   // Statistics
   size_t size() const;
   size_t getBufferSize() const;
+  void invalidateLineIndex();
 
 private:
   std::vector<char> buffer;
@@ -59,7 +61,6 @@ private:
   void moveGapTo(size_t pos);
   void expandGap(size_t minSize = 1024);
   void rebuildLineIndex() const;
-  void invalidateLineIndex();
 
   // Utilities
   size_t gapEnd() const { return gapStart + gapSize; }

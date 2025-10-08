@@ -33,6 +33,116 @@ Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
 {
   tabSize = ConfigManager::getTabSize();
 }
+
+EditorSnapshot Editor::captureSnapshot() const
+{
+  EditorSnapshot snap;
+  snap.lineCount = buffer.getLineCount();
+  snap.cursorLine = cursorLine;
+  snap.cursorCol = cursorCol;
+  snap.viewportTop = viewportTop;
+  snap.viewportLeft = viewportLeft;
+  snap.bufferSize = buffer.size();
+
+  if (snap.lineCount > 0)
+  {
+    snap.firstLine = buffer.getLine(0);
+    snap.lastLine = buffer.getLine(snap.lineCount - 1);
+    if (cursorLine < snap.lineCount)
+    {
+      snap.cursorLineContent = buffer.getLine(cursorLine);
+    }
+  }
+
+  return snap;
+}
+
+ValidationResult Editor::validateState(const std::string &context) const
+{
+  // Check buffer is not empty
+  if (buffer.getLineCount() == 0)
+  {
+    return ValidationResult("Buffer has 0 lines at: " + context);
+  }
+
+  // Check cursor line bounds
+  if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
+  {
+    std::ostringstream oss;
+    oss << "Cursor line " << cursorLine << " out of bounds [0, "
+        << buffer.getLineCount() - 1 << "] at: " << context;
+    return ValidationResult(oss.str());
+  }
+
+  // Check cursor column bounds
+  std::string line = buffer.getLine(cursorLine);
+  if (cursorCol < 0 || cursorCol > static_cast<int>(line.length()))
+  {
+    std::ostringstream oss;
+    oss << "Cursor col " << cursorCol << " out of bounds [0, " << line.length()
+        << "] at: " << context;
+    return ValidationResult(oss.str());
+  }
+
+  // Check viewport bounds
+  if (viewportTop < 0)
+  {
+    return ValidationResult("Viewport top negative at: " + context);
+  }
+
+  if (viewportLeft < 0)
+  {
+    return ValidationResult("Viewport left negative at: " + context);
+  }
+
+  // Check viewport can contain cursor
+  if (cursorLine < viewportTop)
+  {
+    std::ostringstream oss;
+    oss << "Cursor line " << cursorLine << " above viewport " << viewportTop
+        << " at: " + context;
+    return ValidationResult(oss.str());
+  }
+
+  return ValidationResult(); // All valid
+}
+
+// Compare two snapshots and report differences
+std::string Editor::compareSnapshots(const EditorSnapshot &before,
+                                     const EditorSnapshot &after) const
+{
+  std::ostringstream oss;
+
+  if (before.lineCount != after.lineCount)
+  {
+    oss << "LineCount: " << before.lineCount << " -> " << after.lineCount
+        << "\n";
+  }
+  if (before.cursorLine != after.cursorLine)
+  {
+    oss << "CursorLine: " << before.cursorLine << " -> " << after.cursorLine
+        << "\n";
+  }
+  if (before.cursorCol != after.cursorCol)
+  {
+    oss << "CursorCol: " << before.cursorCol << " -> " << after.cursorCol
+        << "\n";
+  }
+  if (before.bufferSize != after.bufferSize)
+  {
+    oss << "BufferSize: " << before.bufferSize << " -> " << after.bufferSize
+        << "\n";
+  }
+  if (before.cursorLineContent != after.cursorLineContent)
+  {
+    oss << "CursorLine content changed\n";
+    oss << "  Before: '" << before.cursorLineContent << "'\n";
+    oss << "  After:  '" << after.cursorLineContent << "'\n";
+  }
+
+  return oss.str();
+}
+
 void Editor::reloadConfig()
 {
   tabSize = ConfigManager::getTabSize();
@@ -1054,195 +1164,482 @@ void Editor::insertChar(char ch)
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
     return;
 
-  // SAVE STATE BEFORE MODIFICATION
-  if (!isUndoRedoing)
+  // === DUAL SYSTEM: Support both old and new undo ===
+
+  if (useDeltaUndo_ && !isUndoRedoing)
   {
+    // NEW: Delta-based undo
+    EditorSnapshot before = captureSnapshot();
+    EditDelta delta = createDeltaForInsertChar(ch);
+
+    // Perform the edit
+    std::string line = buffer.getLine(cursorLine);
+    if (cursorCol > static_cast<int>(line.length()))
+      cursorCol = line.length();
+    if (cursorCol < 0)
+      cursorCol = 0;
+
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+    line.insert(cursorCol, 1, ch);
+    buffer.replaceLine(cursorLine, line);
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
+                                             cursorCol, cursorLine, cursorCol,
+                                             cursorLine, cursorCol + 1);
+      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+    }
+
+    cursorCol++;
+
+    // Update viewport if needed
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
+    int contentWidth = cols - lineNumWidth - 3;
+    if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
+    {
+      viewportLeft = cursorCol - contentWidth + 1;
+    }
+
+    // Complete delta with post-state
+    delta.postCursorLine = cursorLine;
+    delta.postCursorCol = cursorCol;
+    delta.postViewportTop = viewportTop;
+    delta.postViewportLeft = viewportLeft;
+
+    // Validate and add delta
+    EditorSnapshot after = captureSnapshot();
+    ValidationResult valid = validateState("After insertChar");
+
+    if (valid)
+    {
+      addDelta(delta);
+
+      // Auto-commit after timeout
+      auto now = std::chrono::steady_clock::now();
+      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         now - currentDeltaGroup_.timestamp)
+                         .count();
+
+      if (elapsed > UNDO_GROUP_TIMEOUT_MS)
+      {
+        commitDeltaGroup();
+        beginDeltaGroup();
+      }
+    }
+    else
+    {
+      std::cerr << "VALIDATION FAILED in insertChar, delta discarded\n";
+      std::cerr << valid.error << "\n";
+      std::cerr << "Changes: " << compareSnapshots(before, after) << "\n";
+    }
+
+    markModified();
+  }
+  else if (!isUndoRedoing)
+  {
+    // OLD: Full-state undo (fallback)
     saveState();
-  }
 
-  std::string line = buffer.getLine(cursorLine);
-  if (cursorCol > static_cast<int>(line.length()))
-    cursorCol = line.length();
-  if (cursorCol < 0)
-    cursorCol = 0;
+    // Same edit code as above
+    std::string line = buffer.getLine(cursorLine);
+    if (cursorCol > static_cast<int>(line.length()))
+      cursorCol = line.length();
+    if (cursorCol < 0)
+      cursorCol = 0;
 
-  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+    line.insert(cursorCol, 1, ch);
+    buffer.replaceLine(cursorLine, line);
 
-  line.insert(cursorCol, 1, ch);
-  buffer.replaceLine(cursorLine, line);
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
+                                             cursorCol, cursorLine, cursorCol,
+                                             cursorLine, cursorCol + 1);
+      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+    }
 
-  if (syntaxHighlighter && !isUndoRedoing)
-  {
-    syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
-                                           cursorCol, cursorLine, cursorCol,
-                                           cursorLine, cursorCol + 1);
-    syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
-  }
+    cursorCol++;
+    markModified();
 
-  cursorCol++;
-  markModified();
-
-  int rows, cols;
-  getmaxyx(stdscr, rows, cols);
-  int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-  int contentWidth = cols - lineNumWidth - 3;
-  if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
-  {
-    viewportLeft = cursorCol - contentWidth + 1;
+    int rows, cols;
+    getmaxyx(stdscr, rows, cols);
+    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
+    int contentWidth = cols - lineNumWidth - 3;
+    if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
+    {
+      viewportLeft = cursorCol - contentWidth + 1;
+    }
   }
 }
 
 void Editor::insertNewline()
 {
-  // SAVE STATE BEFORE MODIFICATION
-  if (!isUndoRedoing)
+  if (useDeltaUndo_ && !isUndoRedoing)
   {
+    // NEW: Delta-based undo
+    EditorSnapshot before = captureSnapshot();
+    EditDelta delta = createDeltaForNewline();
+
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
+                                    cursorLine, cursorCol, cursorLine + 1, 0);
+    }
+
+    splitLineAtCursor();
+    cursorLine++;
+    cursorCol = 0;
+
+    if (cursorLine >= viewportTop + viewportHeight)
+    {
+      viewportTop = cursorLine - viewportHeight + 1;
+    }
+    viewportLeft = 0;
+
+    // Complete delta
+    delta.postCursorLine = cursorLine;
+    delta.postCursorCol = cursorCol;
+    delta.postViewportTop = viewportTop;
+    delta.postViewportLeft = viewportLeft;
+
+    ValidationResult valid = validateState("After insertNewline");
+    if (valid)
+    {
+      addDelta(delta);
+
+      // Newlines always commit the current group
+      commitDeltaGroup();
+      beginDeltaGroup();
+    }
+    else
+    {
+      std::cerr << "VALIDATION FAILED in insertNewline\n";
+      std::cerr << valid.error << "\n";
+    }
+
+    markModified();
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
+                                             buffer.getLineCount() - 1);
+    }
+  }
+  else if (!isUndoRedoing)
+  {
+    // OLD: Full-state undo
     saveState();
-  }
 
-  size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-  if (syntaxHighlighter && !isUndoRedoing)
-  {
-    syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
-                                  cursorLine, cursorCol, cursorLine + 1, 0);
-  }
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
+                                    cursorLine, cursorCol, cursorLine + 1, 0);
+    }
 
-  splitLineAtCursor();
-  cursorLine++;
-  cursorCol = 0;
+    splitLineAtCursor();
+    cursorLine++;
+    cursorCol = 0;
 
-  if (cursorLine >= viewportTop + viewportHeight)
-  {
-    viewportTop = cursorLine - viewportHeight + 1;
-  }
+    if (cursorLine >= viewportTop + viewportHeight)
+    {
+      viewportTop = cursorLine - viewportHeight + 1;
+    }
+    viewportLeft = 0;
+    markModified();
 
-  viewportLeft = 0;
-  markModified();
-
-  if (syntaxHighlighter && !isUndoRedoing)
-  {
-    syntaxHighlighter->invalidateLineRange(cursorLine - 1,
-                                           buffer.getLineCount() - 1);
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
+                                             buffer.getLineCount() - 1);
+    }
   }
 }
 
 void Editor::deleteChar()
 {
-  // SAVE STATE BEFORE MODIFICATION
-  if (!isUndoRedoing)
+  if (useDeltaUndo_ && !isUndoRedoing)
   {
+    // NEW: Delta-based undo
+    EditorSnapshot before = captureSnapshot();
+    EditDelta delta = createDeltaForDeleteChar();
+
+    std::string line = buffer.getLine(cursorLine);
+
+    if (cursorCol < static_cast<int>(line.length()))
+    {
+      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
+                                      cursorLine, cursorCol + 1, cursorLine,
+                                      cursorCol);
+      }
+
+      line.erase(cursorCol, 1);
+      buffer.replaceLine(cursorLine, line);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+      }
+    }
+    else if (cursorLine < buffer.getLineCount() - 1)
+    {
+      size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        std::string nextLine = buffer.getLine(cursorLine + 1);
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
+                                      (uint32_t)line.length(), cursorLine + 1,
+                                      0, cursorLine, (uint32_t)line.length());
+      }
+
+      joinLineWithNext();
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine,
+                                               buffer.getLineCount() - 1);
+      }
+    }
+
+    // Complete delta
+    delta.postCursorLine = cursorLine;
+    delta.postCursorCol = cursorCol;
+    delta.postViewportTop = viewportTop;
+    delta.postViewportLeft = viewportLeft;
+
+    ValidationResult valid = validateState("After deleteChar");
+    if (valid)
+    {
+      addDelta(delta);
+
+      // If we joined lines, commit group
+      if (delta.operation == EditDelta::JOIN_LINES)
+      {
+        commitDeltaGroup();
+        beginDeltaGroup();
+      }
+    }
+    else
+    {
+      std::cerr << "VALIDATION FAILED in deleteChar\n";
+      std::cerr << valid.error << "\n";
+    }
+
+    markModified();
+  }
+  else if (!isUndoRedoing)
+  {
+    // OLD: Full-state undo
     saveState();
-  }
 
-  std::string line = buffer.getLine(cursorLine);
+    std::string line = buffer.getLine(cursorLine);
 
-  if (cursorCol < static_cast<int>(line.length()))
-  {
-    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
-
-    if (syntaxHighlighter && !isUndoRedoing)
+    if (cursorCol < static_cast<int>(line.length()))
     {
-      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
-                                    cursorLine, cursorCol + 1, cursorLine,
-                                    cursorCol);
+      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
+                                      cursorLine, cursorCol + 1, cursorLine,
+                                      cursorCol);
+      }
+
+      line.erase(cursorCol, 1);
+      buffer.replaceLine(cursorLine, line);
+      markModified();
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+      }
     }
-
-    line.erase(cursorCol, 1);
-    buffer.replaceLine(cursorLine, line);
-    markModified();
-
-    if (syntaxHighlighter && !isUndoRedoing)
+    else if (cursorLine < buffer.getLineCount() - 1)
     {
-      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
-    }
-  }
-  else if (cursorLine < buffer.getLineCount() - 1)
-  {
-    size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
+      size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      std::string nextLine = buffer.getLine(cursorLine + 1);
-      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
-                                    (uint32_t)line.length(), cursorLine + 1, 0,
-                                    cursorLine, (uint32_t)line.length());
-    }
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        std::string nextLine = buffer.getLine(cursorLine + 1);
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
+                                      (uint32_t)line.length(), cursorLine + 1,
+                                      0, cursorLine, (uint32_t)line.length());
+      }
 
-    joinLineWithNext();
-    markModified();
+      joinLineWithNext();
+      markModified();
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine,
-                                             buffer.getLineCount() - 1);
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine,
+                                               buffer.getLineCount() - 1);
+      }
     }
   }
 }
 
 void Editor::backspace()
 {
-  // SAVE STATE BEFORE MODIFICATION
-  if (!isUndoRedoing)
+  if (useDeltaUndo_ && !isUndoRedoing)
   {
+    // NEW: Delta-based undo
+    EditorSnapshot before = captureSnapshot();
+    EditDelta delta = createDeltaForBackspace();
+
+    if (cursorCol > 0)
+    {
+      // Delete character before cursor
+      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
+      std::string line = buffer.getLine(cursorLine);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
+                                      cursorLine, cursorCol, cursorLine,
+                                      cursorCol - 1);
+      }
+
+      line.erase(cursorCol - 1, 1);
+      buffer.replaceLine(cursorLine, line);
+
+      cursorCol--;
+      if (cursorCol < viewportLeft)
+      {
+        viewportLeft = cursorCol;
+      }
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+      }
+    }
+    else if (cursorLine > 0)
+    {
+      // Join with previous line
+      std::string currentLine = buffer.getLine(cursorLine);
+      std::string prevLine = buffer.getLine(cursorLine - 1);
+
+      size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(
+            byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
+            cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
+      }
+
+      cursorCol = static_cast<int>(prevLine.length());
+      cursorLine--;
+
+      buffer.replaceLine(cursorLine, prevLine + currentLine);
+      buffer.deleteLine(cursorLine + 1);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine,
+                                               buffer.getLineCount() - 1);
+      }
+    }
+
+    // Complete delta
+    delta.postCursorLine = cursorLine;
+    delta.postCursorCol = cursorCol;
+    delta.postViewportTop = viewportTop;
+    delta.postViewportLeft = viewportLeft;
+
+    ValidationResult valid = validateState("After backspace");
+    if (valid)
+    {
+      addDelta(delta);
+
+      // If we joined lines, commit group
+      if (delta.operation == EditDelta::JOIN_LINES)
+      {
+        commitDeltaGroup();
+        beginDeltaGroup();
+      }
+    }
+    else
+    {
+      std::cerr << "VALIDATION FAILED in backspace\n";
+      std::cerr << valid.error << "\n";
+    }
+
+    markModified();
+  }
+  else if (!isUndoRedoing)
+  {
+    // OLD: Full-state undo
     saveState();
-  }
 
-  if (cursorCol > 0)
-  {
-    size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
-    std::string line = buffer.getLine(cursorLine);
-
-    if (syntaxHighlighter && !isUndoRedoing)
+    if (cursorCol > 0)
     {
-      syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
-                                    cursorLine, cursorCol, cursorLine,
-                                    cursorCol - 1);
+      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
+      std::string line = buffer.getLine(cursorLine);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
+                                      cursorLine, cursorCol, cursorLine,
+                                      cursorCol - 1);
+      }
+
+      line.erase(cursorCol - 1, 1);
+      buffer.replaceLine(cursorLine, line);
+
+      cursorCol--;
+      if (cursorCol < viewportLeft)
+      {
+        viewportLeft = cursorCol;
+      }
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+      }
+
+      markModified();
     }
-
-    line.erase(cursorCol - 1, 1);
-    buffer.replaceLine(cursorLine, line);
-
-    cursorCol--;
-    if (cursorCol < viewportLeft)
+    else if (cursorLine > 0)
     {
-      viewportLeft = cursorCol;
+      std::string currentLine = buffer.getLine(cursorLine);
+      std::string prevLine = buffer.getLine(cursorLine - 1);
+
+      size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->notifyEdit(
+            byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
+            cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
+      }
+
+      cursorCol = static_cast<int>(prevLine.length());
+      cursorLine--;
+
+      buffer.replaceLine(cursorLine, prevLine + currentLine);
+      buffer.deleteLine(cursorLine + 1);
+
+      if (syntaxHighlighter && !isUndoRedoing)
+      {
+        syntaxHighlighter->invalidateLineRange(cursorLine,
+                                               buffer.getLineCount() - 1);
+      }
+
+      markModified();
     }
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
-    }
-
-    markModified();
-  }
-  else if (cursorLine > 0)
-  {
-    std::string currentLine = buffer.getLine(cursorLine);
-    std::string prevLine = buffer.getLine(cursorLine - 1);
-
-    size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(
-          byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
-          cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
-    }
-
-    cursorCol = static_cast<int>(prevLine.length());
-    cursorLine--;
-
-    buffer.replaceLine(cursorLine, prevLine + currentLine);
-    buffer.deleteLine(cursorLine + 1);
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine,
-                                             buffer.getLineCount() - 1);
-    }
-
-    markModified();
   }
 }
 
@@ -1314,150 +1711,332 @@ void Editor::deleteLine()
   markModified();
 }
 
+// =================================================================
+// Undo/Redo System
+// =================================================================
+
 void Editor::deleteSelection()
 {
   if (!hasSelection && !isSelecting)
     return;
 
-  // SAVE STATE BEFORE MODIFICATION
-  if (!isUndoRedoing)
+  if (useDeltaUndo_ && !isUndoRedoing)
   {
+    // NEW: Delta-based undo
+    EditorSnapshot before = captureSnapshot();
+    EditDelta delta = createDeltaForDeleteSelection();
+
+    auto selection = getNormalizedSelection();
+    int startLine = selection.first.first;
+    int startCol = selection.first.second;
+    int endLine = selection.second.first;
+    int endCol = selection.second.second;
+
+    size_t start_byte = buffer.lineColToPos(startLine, startCol);
+    size_t end_byte = buffer.lineColToPos(endLine, endCol);
+    size_t delete_bytes = end_byte - start_byte;
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
+                                    startCol, endLine, endCol, startLine,
+                                    startCol);
+    }
+
+    if (startLine == endLine)
+    {
+      std::string line = buffer.getLine(startLine);
+      line.erase(startCol, endCol - startCol);
+      buffer.replaceLine(startLine, line);
+    }
+    else
+    {
+      std::string firstLine = buffer.getLine(startLine);
+      std::string lastLine = buffer.getLine(endLine);
+
+      std::string newLine =
+          firstLine.substr(0, startCol) + lastLine.substr(endCol);
+      buffer.replaceLine(startLine, newLine);
+
+      for (int i = endLine; i > startLine; i--)
+      {
+        buffer.deleteLine(i);
+      }
+    }
+
+    updateCursorAndViewport(startLine, startCol);
+    clearSelection();
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->invalidateLineRange(startLine,
+                                             buffer.getLineCount() - 1);
+    }
+
+    // Complete delta
+    delta.postCursorLine = cursorLine;
+    delta.postCursorCol = cursorCol;
+    delta.postViewportTop = viewportTop;
+    delta.postViewportLeft = viewportLeft;
+
+    ValidationResult valid = validateState("After deleteSelection");
+    if (valid)
+    {
+      addDelta(delta);
+      commitDeltaGroup();
+      beginDeltaGroup();
+    }
+    else
+    {
+      std::cerr << "VALIDATION FAILED in deleteSelection\n";
+      std::cerr << valid.error << "\n";
+    }
+
+    markModified();
+  }
+  else if (!isUndoRedoing)
+  {
+    // OLD: Full-state undo
     saveState();
-  }
 
-  auto selection = getNormalizedSelection();
-  int startLine = selection.first.first;
-  int startCol = selection.first.second;
-  int endLine = selection.second.first;
-  int endCol = selection.second.second;
+    auto selection = getNormalizedSelection();
+    int startLine = selection.first.first;
+    int startCol = selection.first.second;
+    int endLine = selection.second.first;
+    int endCol = selection.second.second;
 
-  size_t start_byte = buffer.lineColToPos(startLine, startCol);
-  size_t end_byte = buffer.lineColToPos(endLine, endCol);
-  size_t delete_bytes = end_byte - start_byte;
+    size_t start_byte = buffer.lineColToPos(startLine, startCol);
+    size_t end_byte = buffer.lineColToPos(endLine, endCol);
+    size_t delete_bytes = end_byte - start_byte;
 
-  if (syntaxHighlighter && !isUndoRedoing)
-  {
-    syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
-                                  startCol, endLine, endCol, startLine,
-                                  startCol);
-  }
-
-  if (startLine == endLine)
-  {
-    std::string line = buffer.getLine(startLine);
-    line.erase(startCol, endCol - startCol);
-    buffer.replaceLine(startLine, line);
-  }
-  else
-  {
-    std::string firstLine = buffer.getLine(startLine);
-    std::string lastLine = buffer.getLine(endLine);
-
-    std::string newLine =
-        firstLine.substr(0, startCol) + lastLine.substr(endCol);
-    buffer.replaceLine(startLine, newLine);
-
-    for (int i = endLine; i > startLine; i--)
+    if (syntaxHighlighter && !isUndoRedoing)
     {
-      buffer.deleteLine(i);
+      syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
+                                    startCol, endLine, endCol, startLine,
+                                    startCol);
+    }
+
+    if (startLine == endLine)
+    {
+      std::string line = buffer.getLine(startLine);
+      line.erase(startCol, endCol - startCol);
+      buffer.replaceLine(startLine, line);
+    }
+    else
+    {
+      std::string firstLine = buffer.getLine(startLine);
+      std::string lastLine = buffer.getLine(endLine);
+
+      std::string newLine =
+          firstLine.substr(0, startCol) + lastLine.substr(endCol);
+      buffer.replaceLine(startLine, newLine);
+
+      for (int i = endLine; i > startLine; i--)
+      {
+        buffer.deleteLine(i);
+      }
+    }
+
+    updateCursorAndViewport(startLine, startCol);
+    clearSelection();
+    markModified();
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->invalidateLineRange(startLine,
+                                             buffer.getLineCount() - 1);
     }
   }
-
-  updateCursorAndViewport(startLine, startCol);
-  clearSelection();
-  markModified();
-
-  if (syntaxHighlighter && !isUndoRedoing)
-  {
-    syntaxHighlighter->invalidateLineRange(startLine,
-                                           buffer.getLineCount() - 1);
-  }
-}
-
-// =================================================================
-// Undo/Redo System
-// =================================================================
-
-void Editor::saveState()
-{
-  if (isSaving || isUndoRedoing)
-    return;
-
-  auto now = std::chrono::steady_clock::now();
-  auto elapsed =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEditTime)
-          .count();
-
-  // Only save if enough time has passed since last edit
-  if (elapsed > UNDO_GROUP_TIMEOUT_MS || undoStack.empty())
-  {
-    EditorState state = getCurrentState();
-    undoStack.push(state);
-    limitUndoStack();
-
-    while (!redoStack.empty())
-    {
-      redoStack.pop();
-    }
-  }
-
-  lastEditTime = now;
 }
 
 void Editor::undo()
 {
-  if (undoStack.empty())
-    return;
-
-  // Set flag to prevent saveState() and Tree-sitter updates during restore
-  isUndoRedoing = true;
-
-  // Save current state to redo stack
-  redoStack.push(getCurrentState());
-
-  // Get state to restore
-  EditorState state = undoStack.top();
-  undoStack.pop();
-
-  // Restore the state
-  restoreState(state);
-
-  // Full reparse needed after undo
-  if (syntaxHighlighter)
+  if (useDeltaUndo_)
   {
-    syntaxHighlighter->bufferChanged(buffer);
-  }
+    // Commit any pending delta group first
+    if (!currentDeltaGroup_.isEmpty())
+    {
+      commitDeltaGroup();
+    }
 
-  isModified = true;
-  isUndoRedoing = false;
+    if (deltaUndoStack_.empty())
+    {
+      return;
+    }
+
+#ifdef DEBUG_DELTA_UNDO
+    std::cerr << "\n=== UNDO START ===\n";
+    EditorSnapshot beforeUndo = captureSnapshot();
+#endif
+
+    // Get the delta group to undo
+    DeltaGroup group = deltaUndoStack_.top();
+    deltaUndoStack_.pop();
+
+#ifdef DEBUG_DELTA_UNDO
+    std::cerr << "Undoing group:\n" << group.toString() << "\n";
+#endif
+
+    // Track affected line range for incremental highlighting
+    int minAffectedLine = buffer.getLineCount();
+    int maxAffectedLine = 0;
+
+    // Apply deltas in REVERSE order
+    for (auto it = group.deltas.rbegin(); it != group.deltas.rend(); ++it)
+    {
+      // Track which lines are affected
+      minAffectedLine =
+          std::min(minAffectedLine, std::min(it->startLine, it->preCursorLine));
+      maxAffectedLine =
+          std::max(maxAffectedLine, std::max(it->endLine, it->postCursorLine));
+
+      applyDeltaReverse(*it);
+
+#ifdef DEBUG_DELTA_UNDO
+      ValidationResult valid = validateState("After undo delta");
+      if (!valid)
+      {
+        std::cerr << "CRITICAL: Validation failed during undo!\n";
+        std::cerr << valid.error << "\n";
+      }
+#endif
+    }
+
+    // Save to redo stack
+    deltaRedoStack_.push(group);
+
+    // FIXED: Incremental syntax update instead of full reparse
+    if (syntaxHighlighter)
+    {
+      // Only invalidate affected line range, not entire cache
+      syntaxHighlighter->invalidateLineRange(minAffectedLine,
+                                             buffer.getLineCount() - 1);
+
+      // Use viewport-only parsing for immediate visual update
+      syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
+
+      // Schedule background full reparse (non-blocking)
+      syntaxHighlighter->scheduleBackgroundParse(buffer);
+    }
+
+    isModified = true;
+
+#ifdef DEBUG_DELTA_UNDO
+    EditorSnapshot afterUndo = captureSnapshot();
+    std::cerr << "Affected lines: " << minAffectedLine << " to "
+              << maxAffectedLine << "\n";
+    std::cerr << "=== UNDO END ===\n\n";
+#endif
+  }
+  else
+  {
+    // OLD: Full-state undo (fallback)
+    if (undoStack.empty())
+      return;
+
+    isUndoRedoing = true;
+    redoStack.push(getCurrentState());
+    EditorState state = undoStack.top();
+    undoStack.pop();
+    restoreState(state);
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->bufferChanged(buffer);
+    }
+
+    isModified = true;
+    isUndoRedoing = false;
+  }
 }
 
 void Editor::redo()
 {
-  if (redoStack.empty())
-    return;
-
-  // Set flag to prevent saveState() and Tree-sitter updates during restore
-  isUndoRedoing = true;
-
-  // Save current state to undo stack
-  undoStack.push(getCurrentState());
-
-  // Get state to restore
-  EditorState state = redoStack.top();
-  redoStack.pop();
-
-  // Restore the state
-  restoreState(state);
-
-  // Full reparse needed after redo
-  if (syntaxHighlighter)
+  if (useDeltaUndo_)
   {
-    syntaxHighlighter->bufferChanged(buffer);
-  }
+    if (deltaRedoStack_.empty())
+    {
+      return;
+    }
 
-  isModified = true;
-  isUndoRedoing = false;
+#ifdef DEBUG_DELTA_UNDO
+    std::cerr << "\n=== REDO START ===\n";
+    EditorSnapshot beforeRedo = captureSnapshot();
+#endif
+
+    // Get the delta group to redo
+    DeltaGroup group = deltaRedoStack_.top();
+    deltaRedoStack_.pop();
+
+#ifdef DEBUG_DELTA_UNDO
+    std::cerr << "Redoing group:\n" << group.toString() << "\n";
+#endif
+
+    // Track affected line range
+    int minAffectedLine = buffer.getLineCount();
+    int maxAffectedLine = 0;
+
+    // Apply deltas in FORWARD order
+    for (const auto &delta : group.deltas)
+    {
+      minAffectedLine = std::min(
+          minAffectedLine, std::min(delta.startLine, delta.preCursorLine));
+      maxAffectedLine = std::max(maxAffectedLine,
+                                 std::max(delta.endLine, delta.postCursorLine));
+
+      applyDeltaForward(delta);
+
+#ifdef DEBUG_DELTA_UNDO
+      ValidationResult valid = validateState("After redo delta");
+      if (!valid)
+      {
+        std::cerr << "CRITICAL: Validation failed during redo!\n";
+        std::cerr << valid.error << "\n";
+      }
+#endif
+    }
+
+    // Save to undo stack
+    deltaUndoStack_.push(group);
+
+    // FIXED: Incremental syntax update
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineRange(minAffectedLine,
+                                             buffer.getLineCount() - 1);
+      syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
+      syntaxHighlighter->scheduleBackgroundParse(buffer);
+    }
+
+    isModified = true;
+
+#ifdef DEBUG_DELTA_UNDO
+    EditorSnapshot afterRedo = captureSnapshot();
+    std::cerr << "Affected lines: " << minAffectedLine << " to "
+              << maxAffectedLine << "\n";
+    std::cerr << "=== REDO END ===\n\n";
+#endif
+  }
+  else
+  {
+    // OLD: Full-state redo (fallback)
+    if (redoStack.empty())
+      return;
+
+    isUndoRedoing = true;
+    undoStack.push(getCurrentState());
+    EditorState state = redoStack.top();
+    redoStack.pop();
+    restoreState(state);
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->bufferChanged(buffer);
+    }
+
+    isModified = true;
+    isUndoRedoing = false;
+  }
 }
 
 EditorState Editor::getCurrentState()
@@ -1795,5 +2374,763 @@ void Editor::setCursorMode()
     printf("\033[6 q");
     fflush(stdout);
     break;
+  }
+}
+
+// === Delta Group Management ===
+
+void Editor::beginDeltaGroup()
+{
+  currentDeltaGroup_ = DeltaGroup();
+  currentDeltaGroup_.initialLineCount = buffer.getLineCount();
+  currentDeltaGroup_.initialBufferSize = buffer.size();
+  currentDeltaGroup_.timestamp = std::chrono::steady_clock::now();
+}
+
+void Editor::addDelta(const EditDelta &delta)
+{
+  currentDeltaGroup_.addDelta(delta);
+
+// DEBUG: Validate after every delta in debug builds
+#ifdef DEBUG_DELTA_UNDO
+  ValidationResult valid = validateState("After adding delta");
+  if (!valid)
+  {
+    std::cerr << "VALIDATION FAILED after delta:\n";
+    std::cerr << delta.toString() << "\n";
+    std::cerr << "Error: " << valid.error << "\n";
+    std::cerr << "Current state: " << captureSnapshot().toString() << "\n";
+  }
+#endif
+}
+
+void Editor::commitDeltaGroup()
+{
+  if (currentDeltaGroup_.isEmpty())
+  {
+    return;
+  }
+
+  // Validate before committing
+  ValidationResult valid = validateState("Before committing delta group");
+  if (!valid)
+  {
+    std::cerr << "WARNING: Invalid state before commit, discarding group\n";
+    std::cerr << valid.error << "\n";
+    currentDeltaGroup_ = DeltaGroup();
+    return;
+  }
+
+  deltaUndoStack_.push(currentDeltaGroup_);
+
+  // Clear redo stack on new edit
+  while (!deltaRedoStack_.empty())
+  {
+    deltaRedoStack_.pop();
+  }
+
+  // Limit stack size
+  while (deltaUndoStack_.size() > MAX_UNDO_LEVELS)
+  {
+    // Remove oldest (bottom of stack)
+    std::stack<DeltaGroup> temp;
+    bool first = true;
+    while (!deltaUndoStack_.empty())
+    {
+      if (first)
+      {
+        first = false;
+        deltaUndoStack_.pop(); // Discard oldest
+      }
+      else
+      {
+        temp.push(deltaUndoStack_.top());
+        deltaUndoStack_.pop();
+      }
+    }
+    while (!temp.empty())
+    {
+      deltaUndoStack_.push(temp.top());
+      temp.pop();
+    }
+  }
+
+  currentDeltaGroup_ = DeltaGroup();
+}
+
+// === Delta Creation for Each Operation ===
+
+EditDelta Editor::createDeltaForInsertChar(char ch)
+{
+  EditDelta delta;
+  delta.operation = EditDelta::INSERT_CHAR;
+
+  // Capture state BEFORE edit
+  delta.preCursorLine = cursorLine;
+  delta.preCursorCol = cursorCol;
+  delta.preViewportTop = viewportTop;
+  delta.preViewportLeft = viewportLeft;
+
+  delta.startLine = cursorLine;
+  delta.startCol = cursorCol;
+  delta.endLine = cursorLine;
+  delta.endCol = cursorCol;
+
+  // Content: what we're inserting
+  delta.insertedContent = std::string(1, ch);
+  delta.deletedContent = ""; // Nothing deleted
+
+  // No structural change
+  delta.lineCountDelta = 0;
+
+  // Post-state will be filled after edit completes
+  return delta;
+}
+
+EditDelta Editor::createDeltaForDeleteChar()
+{
+  EditDelta delta;
+  delta.operation = EditDelta::DELETE_CHAR;
+
+  // Capture state BEFORE deletion
+  delta.preCursorLine = cursorLine;
+  delta.preCursorCol = cursorCol;
+  delta.preViewportTop = viewportTop;
+  delta.preViewportLeft = viewportLeft;
+
+  delta.startLine = cursorLine;
+  delta.startCol = cursorCol;
+
+  // Capture what we're about to delete
+  std::string line = buffer.getLine(cursorLine);
+
+  if (cursorCol < static_cast<int>(line.length()))
+  {
+    // Deleting a character on current line
+    delta.deletedContent = std::string(1, line[cursorCol]);
+    delta.endLine = cursorLine;
+    delta.endCol = cursorCol + 1;
+    delta.lineCountDelta = 0;
+  }
+  else if (cursorLine < buffer.getLineCount() - 1)
+  {
+    // Deleting newline - will join lines
+    delta.operation = EditDelta::JOIN_LINES;
+    delta.deletedContent = "\n";
+    delta.endLine = cursorLine + 1;
+    delta.endCol = 0;
+    delta.lineCountDelta = -1;
+
+    // Save line contents for reversal
+    delta.firstLineBeforeJoin = line;
+    delta.secondLineBeforeJoin = buffer.getLine(cursorLine + 1);
+  }
+
+  delta.insertedContent = ""; // Nothing inserted
+
+  return delta;
+}
+
+EditDelta Editor::createDeltaForBackspace()
+{
+  EditDelta delta;
+  delta.operation = EditDelta::DELETE_CHAR;
+
+  // Capture state BEFORE deletion
+  delta.preCursorLine = cursorLine;
+  delta.preCursorCol = cursorCol;
+  delta.preViewportTop = viewportTop;
+  delta.preViewportLeft = viewportLeft;
+
+  if (cursorCol > 0)
+  {
+    // Deleting character before cursor on same line
+    std::string line = buffer.getLine(cursorLine);
+    delta.deletedContent = std::string(1, line[cursorCol - 1]);
+
+    delta.startLine = cursorLine;
+    delta.startCol = cursorCol - 1;
+    delta.endLine = cursorLine;
+    delta.endCol = cursorCol;
+    delta.lineCountDelta = 0;
+  }
+  else if (cursorLine > 0)
+  {
+    // Backspace at line start - join with previous line
+    delta.operation = EditDelta::JOIN_LINES;
+    delta.deletedContent = "\n";
+
+    std::string prevLine = buffer.getLine(cursorLine - 1);
+    std::string currLine = buffer.getLine(cursorLine);
+
+    delta.startLine = cursorLine - 1;
+    delta.startCol = prevLine.length();
+    delta.endLine = cursorLine;
+    delta.endCol = 0;
+    delta.lineCountDelta = -1;
+
+    // Save line contents for reversal
+    delta.firstLineBeforeJoin = prevLine;
+    delta.secondLineBeforeJoin = currLine;
+  }
+
+  delta.insertedContent = ""; // Nothing inserted
+
+  return delta;
+}
+
+EditDelta Editor::createDeltaForNewline()
+{
+  EditDelta delta;
+  delta.operation = EditDelta::SPLIT_LINE;
+
+  // Capture state BEFORE split
+  delta.preCursorLine = cursorLine;
+  delta.preCursorCol = cursorCol;
+  delta.preViewportTop = viewportTop;
+  delta.preViewportLeft = viewportLeft;
+
+  delta.startLine = cursorLine;
+  delta.startCol = cursorCol;
+  delta.endLine = cursorLine + 1; // New line will be created
+  delta.endCol = 0;
+
+  // Save the line content before split
+  delta.lineBeforeSplit = buffer.getLine(cursorLine);
+
+  delta.insertedContent = "\n";
+  delta.deletedContent = "";
+  delta.lineCountDelta = 1; // One new line
+
+  return delta;
+}
+
+EditDelta Editor::createDeltaForDeleteSelection()
+{
+  EditDelta delta;
+  delta.operation = EditDelta::DELETE_TEXT;
+
+  // Capture state
+  delta.preCursorLine = cursorLine;
+  delta.preCursorCol = cursorCol;
+  delta.preViewportTop = viewportTop;
+  delta.preViewportLeft = viewportLeft;
+
+  auto [start, end] = getNormalizedSelection();
+  delta.startLine = start.first;
+  delta.startCol = start.second;
+  delta.endLine = end.first;
+  delta.endCol = end.second;
+
+  // Capture the deleted text
+  delta.deletedContent = getSelectedText();
+  delta.insertedContent = "";
+
+  // Calculate line count change
+  delta.lineCountDelta = -(end.first - start.first);
+
+  return delta;
+}
+
+// === Memory Usage Stats ===
+
+size_t Editor::getUndoMemoryUsage() const
+{
+  size_t total = 0;
+
+  if (useDeltaUndo_)
+  {
+    // Count delta stack
+    std::stack<DeltaGroup> temp = deltaUndoStack_;
+    while (!temp.empty())
+    {
+      total += temp.top().getMemorySize();
+      temp.pop();
+    }
+  }
+  else
+  {
+    // Count old state stack (approximate)
+    total = undoStack.size() * sizeof(EditorState);
+    std::stack<EditorState> temp = undoStack;
+    while (!temp.empty())
+    {
+      total += temp.top().content.capacity();
+      temp.pop();
+    }
+  }
+
+  return total;
+}
+
+size_t Editor::getRedoMemoryUsage() const
+{
+  size_t total = 0;
+
+  if (useDeltaUndo_)
+  {
+    std::stack<DeltaGroup> temp = deltaRedoStack_;
+    while (!temp.empty())
+    {
+      total += temp.top().getMemorySize();
+      temp.pop();
+    }
+  }
+  else
+  {
+    total = redoStack.size() * sizeof(EditorState);
+    std::stack<EditorState> temp = redoStack;
+    while (!temp.empty())
+    {
+      total += temp.top().content.capacity();
+      temp.pop();
+    }
+  }
+
+  return total;
+}
+
+void Editor::applyDeltaForward(const EditDelta &delta)
+{
+  isUndoRedoing = true;
+
+#ifdef DEBUG_DELTA_UNDO
+  std::cerr << "Applying delta forward: " << delta.toString() << "\n";
+#endif
+
+  // Restore cursor to PRE-edit position
+  cursorLine = delta.preCursorLine;
+  cursorCol = delta.preCursorCol;
+  viewportTop = delta.preViewportTop;
+  viewportLeft = delta.preViewportLeft;
+
+  validateCursorAndViewport();
+
+  // Notify Tree-sitter BEFORE applying changes
+  notifyTreeSitterEdit(delta, false); // false = forward (redo)
+
+  switch (delta.operation)
+  {
+  case EditDelta::INSERT_CHAR:
+  case EditDelta::INSERT_TEXT:
+  {
+    // Re-insert the text
+    std::string line = buffer.getLine(cursorLine);
+    line.insert(cursorCol, delta.insertedContent);
+    buffer.replaceLine(cursorLine, line);
+    cursorCol += delta.insertedContent.length();
+    break;
+  }
+
+  case EditDelta::DELETE_CHAR:
+  case EditDelta::DELETE_TEXT:
+  {
+    // Re-delete the text
+    if (delta.startLine == delta.endLine)
+    {
+      std::string line = buffer.getLine(delta.startLine);
+      line.erase(delta.startCol, delta.deletedContent.length());
+      buffer.replaceLine(delta.startLine, line);
+    }
+    else
+    {
+      // Multi-line deletion
+      std::string firstLine = buffer.getLine(delta.startLine);
+      std::string lastLine = buffer.getLine(delta.endLine);
+      std::string newLine =
+          firstLine.substr(0, delta.startCol) + lastLine.substr(delta.endCol);
+      buffer.replaceLine(delta.startLine, newLine);
+
+      for (int i = delta.endLine; i > delta.startLine; i--)
+      {
+        buffer.deleteLine(i);
+      }
+    }
+    break;
+  }
+
+  case EditDelta::SPLIT_LINE:
+  {
+    // Re-split the line
+    std::string line = buffer.getLine(cursorLine);
+    std::string leftPart = line.substr(0, cursorCol);
+    std::string rightPart = line.substr(cursorCol);
+
+    buffer.replaceLine(cursorLine, leftPart);
+    buffer.insertLine(cursorLine + 1, rightPart);
+
+    cursorLine++;
+    cursorCol = 0;
+    break;
+  }
+
+  case EditDelta::JOIN_LINES:
+  {
+    // Re-join the lines
+    if (delta.startLine + 1 < buffer.getLineCount())
+    {
+      std::string firstLine = buffer.getLine(delta.startLine);
+      std::string secondLine = buffer.getLine(delta.startLine + 1);
+      buffer.replaceLine(delta.startLine, firstLine + secondLine);
+      buffer.deleteLine(delta.startLine + 1);
+    }
+    break;
+  }
+
+  case EditDelta::REPLACE_LINE:
+  {
+    if (!delta.insertedContent.empty())
+    {
+      buffer.replaceLine(delta.startLine, delta.insertedContent);
+    }
+    break;
+  }
+  }
+
+  // Restore POST-edit cursor position
+  cursorLine = delta.postCursorLine;
+  cursorCol = delta.postCursorCol;
+  viewportTop = delta.postViewportTop;
+  viewportLeft = delta.postViewportLeft;
+
+  validateCursorAndViewport();
+  buffer.invalidateLineIndex();
+
+  // Invalidate only affected lines (not entire cache)
+  if (syntaxHighlighter)
+  {
+    int startLine = std::min(delta.startLine, delta.preCursorLine);
+    int endLine = std::max(delta.endLine, delta.postCursorLine);
+    syntaxHighlighter->invalidateLineRange(startLine,
+                                           buffer.getLineCount() - 1);
+  }
+
+  isUndoRedoing = false;
+}
+
+// === Apply Delta Reverse (for Undo) ===
+
+void Editor::applyDeltaReverse(const EditDelta &delta)
+{
+  isUndoRedoing = true;
+
+#ifdef DEBUG_DELTA_UNDO
+  std::cerr << "Applying delta reverse: " << delta.toString() << "\n";
+#endif
+
+  // Restore cursor to POST-edit position
+  cursorLine = delta.postCursorLine;
+  cursorCol = delta.postCursorCol;
+  viewportTop = delta.postViewportTop;
+  viewportLeft = delta.postViewportLeft;
+
+  validateCursorAndViewport();
+
+  switch (delta.operation)
+  {
+  case EditDelta::INSERT_CHAR:
+  case EditDelta::INSERT_TEXT:
+  {
+    // Reverse of insert is delete
+    std::string line = buffer.getLine(delta.startLine);
+    if (delta.startCol + delta.insertedContent.length() <= line.length())
+    {
+      line.erase(delta.startCol, delta.insertedContent.length());
+      buffer.replaceLine(delta.startLine, line);
+    }
+    break;
+  }
+
+  case EditDelta::DELETE_CHAR:
+  case EditDelta::DELETE_TEXT:
+  {
+    // FIXED: Proper multi-line restoration
+    if (delta.startLine == delta.endLine)
+    {
+      // Single line restoration (simple case)
+      std::string line = buffer.getLine(delta.startLine);
+      line.insert(delta.startCol, delta.deletedContent);
+      buffer.replaceLine(delta.startLine, line);
+    }
+    else
+    {
+      // Multi-line restoration (the bug was here!)
+
+      // Step 1: Get the current line at startLine
+      std::string currentLine = buffer.getLine(delta.startLine);
+
+      // Step 2: Split current line at insertion point
+      std::string beforeInsert = currentLine.substr(0, delta.startCol);
+      std::string afterInsert = currentLine.substr(delta.startCol);
+
+      // Step 3: Split deletedContent by ACTUAL newlines, preserving them
+      std::vector<std::string> linesToRestore;
+      size_t pos = 0;
+      size_t nextNewline;
+
+      while ((nextNewline = delta.deletedContent.find('\n', pos)) !=
+             std::string::npos)
+      {
+        // Include everything up to (but not including) the newline
+        linesToRestore.push_back(
+            delta.deletedContent.substr(pos, nextNewline - pos));
+        pos = nextNewline + 1;
+      }
+
+      // Add remaining content (after last newline)
+      if (pos < delta.deletedContent.length())
+      {
+        linesToRestore.push_back(delta.deletedContent.substr(pos));
+      }
+
+      // Step 4: Reconstruct lines correctly
+      if (!linesToRestore.empty())
+      {
+        // First line: beforeInsert + first restored line
+        buffer.replaceLine(delta.startLine, beforeInsert + linesToRestore[0]);
+
+        // Insert middle lines (if any)
+        for (size_t i = 1; i < linesToRestore.size(); ++i)
+        {
+          buffer.insertLine(delta.startLine + i, linesToRestore[i]);
+        }
+
+        // Handle the content after insertion point
+        if (linesToRestore.size() == 1)
+        {
+          // Single line case: append afterInsert to same line
+          std::string finalLine = buffer.getLine(delta.startLine);
+          buffer.replaceLine(delta.startLine, finalLine + afterInsert);
+        }
+        else
+        {
+          // Multi-line case: append afterInsert to last restored line
+          int lastLineIdx = delta.startLine + linesToRestore.size() - 1;
+          std::string lastLine = buffer.getLine(lastLineIdx);
+          buffer.replaceLine(lastLineIdx, lastLine + afterInsert);
+        }
+      }
+      else
+      {
+        // Edge case: deletedContent was empty (shouldn't happen, but be safe)
+        std::cerr << "WARNING: Empty deletedContent in multi-line restore\n";
+      }
+    }
+    break;
+  }
+
+  case EditDelta::SPLIT_LINE:
+  {
+    // Reverse of split is join
+    if (!delta.lineBeforeSplit.empty())
+    {
+      if (delta.startLine + 1 < buffer.getLineCount())
+      {
+        buffer.replaceLine(delta.startLine, delta.lineBeforeSplit);
+        buffer.deleteLine(delta.startLine + 1);
+      }
+    }
+    break;
+  }
+
+  case EditDelta::JOIN_LINES:
+  {
+    // Reverse of join is split
+    if (!delta.firstLineBeforeJoin.empty() &&
+        !delta.secondLineBeforeJoin.empty())
+    {
+      buffer.replaceLine(delta.startLine, delta.firstLineBeforeJoin);
+      buffer.insertLine(delta.startLine + 1, delta.secondLineBeforeJoin);
+    }
+    break;
+  }
+
+  case EditDelta::REPLACE_LINE:
+  {
+    // Reverse of replace is restore original
+    if (!delta.deletedContent.empty())
+    {
+      buffer.replaceLine(delta.startLine, delta.deletedContent);
+    }
+    break;
+  }
+  }
+
+  // Restore PRE-edit cursor position
+  cursorLine = delta.preCursorLine;
+  cursorCol = delta.preCursorCol;
+  viewportTop = delta.preViewportTop;
+  viewportLeft = delta.preViewportLeft;
+
+  validateCursorAndViewport();
+  buffer.invalidateLineIndex();
+
+  isUndoRedoing = false;
+}
+
+// Fallback
+void Editor::saveState()
+{
+  if (isSaving || isUndoRedoing)
+    return;
+
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEditTime)
+          .count();
+
+  // Only save if enough time has passed since last edit
+  if (elapsed > UNDO_GROUP_TIMEOUT_MS || undoStack.empty())
+  {
+    EditorState state = getCurrentState();
+    undoStack.push(state);
+    limitUndoStack();
+
+    while (!redoStack.empty())
+    {
+      redoStack.pop();
+    }
+  }
+
+  lastEditTime = now;
+}
+
+void Editor::optimizedLineInvalidation(int startLine, int endLine)
+{
+  if (!syntaxHighlighter)
+  {
+    return;
+  }
+
+  // Only invalidate if change is significant
+  int changeSize = endLine - startLine + 1;
+
+  if (changeSize > 100)
+  {
+    // Large change: full reparse (but async)
+    syntaxHighlighter->clearAllCache();
+    syntaxHighlighter->scheduleBackgroundParse(buffer);
+  }
+  else if (changeSize > 10)
+  {
+    // Medium change: invalidate range and reparse viewport
+    syntaxHighlighter->invalidateLineRange(startLine,
+                                           buffer.getLineCount() - 1);
+    syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
+  }
+  else
+  {
+    // Small change: just invalidate the affected lines
+    syntaxHighlighter->invalidateLineRange(startLine, endLine);
+  }
+}
+
+// ============================================================================
+// FIX 4: Add Tree-sitter Edit Notification for Delta Operations
+// ============================================================================
+// Add this method to track Tree-sitter edits during delta apply:
+
+void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
+{
+  if (!syntaxHighlighter)
+  {
+    return;
+  }
+
+  // Calculate byte positions
+  size_t start_byte = buffer.lineColToPos(delta.startLine, delta.startCol);
+
+  if (isReverse)
+  {
+    // Undoing: reverse the original operation
+    switch (delta.operation)
+    {
+    case EditDelta::INSERT_CHAR:
+    case EditDelta::INSERT_TEXT:
+    {
+      // Was an insert, now delete
+      size_t len = delta.insertedContent.length();
+      syntaxHighlighter->notifyEdit(start_byte, 0, len, // Inserting back
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine, delta.startCol,
+                                    delta.postCursorLine, delta.postCursorCol);
+      break;
+    }
+
+    case EditDelta::DELETE_CHAR:
+    case EditDelta::DELETE_TEXT:
+    {
+      // Was a delete, now insert
+      size_t len = delta.deletedContent.length();
+      syntaxHighlighter->notifyEdit(start_byte, len, 0, // Deleting
+                                    delta.startLine, delta.startCol,
+                                    delta.endLine, delta.endCol,
+                                    delta.startLine, delta.startCol);
+      break;
+    }
+
+    case EditDelta::SPLIT_LINE:
+    {
+      // Was a split, now join
+      syntaxHighlighter->notifyEdit(start_byte, 0, 1, // Remove newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0);
+      break;
+    }
+
+    case EditDelta::JOIN_LINES:
+    {
+      // Was a join, now split
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, // Add newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0, delta.startLine,
+                                    delta.startCol);
+      break;
+    }
+    }
+  }
+  else
+  {
+    // Redoing: apply the original operation
+    switch (delta.operation)
+    {
+    case EditDelta::INSERT_CHAR:
+    case EditDelta::INSERT_TEXT:
+    {
+      size_t len = delta.insertedContent.length();
+      syntaxHighlighter->notifyEdit(start_byte, len, 0, delta.startLine,
+                                    delta.startCol, delta.postCursorLine,
+                                    delta.postCursorCol, delta.startLine,
+                                    delta.startCol);
+      break;
+    }
+
+    case EditDelta::DELETE_CHAR:
+    case EditDelta::DELETE_TEXT:
+    {
+      size_t len = delta.deletedContent.length();
+      syntaxHighlighter->notifyEdit(
+          start_byte, 0, len, delta.startLine, delta.startCol, delta.startLine,
+          delta.startCol, delta.endLine, delta.endCol);
+      break;
+    }
+
+    case EditDelta::SPLIT_LINE:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, delta.startLine,
+                                    delta.startCol, delta.startLine + 1, 0,
+                                    delta.startLine, delta.startCol);
+      break;
+    }
+
+    case EditDelta::JOIN_LINES:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 0, 1, delta.startLine,
+                                    delta.startCol, delta.startLine,
+                                    delta.startCol, delta.startLine + 1, 0);
+      break;
+    }
+    }
   }
 }
