@@ -1,7 +1,4 @@
 <!-- Banner / Logo -->
-<p align="center">
-  <img src="https://raw.githubusercontent.com/moisnx/arc/main/.github/assets/logo.png" alt="Arc Editor Logo" width="120" height="120"/>
-</p>
 
 <h1 align="center">Arc Editor</h1>
 <p align="center"><b>Simple. Modern. Efficient.</b></p>
@@ -38,7 +35,7 @@
 ## 🖥️ Demo
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/moisnx/arc/master/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="700"/>
+  <img src="https://raw.githubusercontent.com/moisnx/arc/master/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="800"/>
 </p>
 
 ---
@@ -66,6 +63,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ./arc
 ```
+
 </details>
 
 <details>
@@ -80,6 +78,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(sysctl -n hw.ncpu)
 ./arc
 ```
+
 </details>
 
 <details>
@@ -101,6 +100,7 @@ cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake 
 cmake --build . --config Release
 .\Release\arc.exe
 ```
+
 </details>
 
 > **Note:** Forgot `--recursive`? Run `git submodule update --init --recursive`
@@ -138,37 +138,41 @@ arc --help
   <summary><b>Show Key Bindings</b></summary>
 
 #### File Operations
-| Key      | Action                              |
-|----------|-------------------------------------|
-| Ctrl+S   | Save file                           |
-| Ctrl+Q   | Quit (with unsaved changes prompt)  |
+
+| Key    | Action                             |
+| ------ | ---------------------------------- |
+| Ctrl+S | Save file                          |
+| Ctrl+Q | Quit (with unsaved changes prompt) |
 
 #### Editing
-| Key        | Action                        |
-|------------|------------------------------|
-| Ctrl+Z     | Undo                         |
-| Ctrl+Y     | Redo                         |
-| Backspace  | Delete char before cursor    |
-| Delete     | Delete char at cursor        |
-| Enter      | Insert new line              |
-| Tab        | Insert 4 spaces              |
+
+| Key       | Action                    |
+| --------- | ------------------------- |
+| Ctrl+Z    | Undo                      |
+| Ctrl+Y    | Redo                      |
+| Backspace | Delete char before cursor |
+| Delete    | Delete char at cursor     |
+| Enter     | Insert new line           |
+| Tab       | Insert 4 spaces           |
 
 #### Navigation
-| Key         | Action                 |
-|-------------|-----------------------|
-| Arrow Keys  | Move cursor           |
-| Home/End    | Line start/end        |
-| PgUp/PgDn   | Scroll viewport       |
+
+| Key        | Action          |
+| ---------- | --------------- |
+| Arrow Keys | Move cursor     |
+| Home/End   | Line start/end  |
+| PgUp/PgDn  | Scroll viewport |
 
 #### Selection
-| Key           | Action              |
-|---------------|---------------------|
-| Shift+Arrows  | Extend selection    |
-| Ctrl+A        | Select all          |
-| Ctrl+C        | Copy selection      |
-| Ctrl+X        | Cut selection       |
-| Ctrl+V        | Paste from clipboard|
-| Esc           | Clear selection     |
+
+| Key          | Action               |
+| ------------ | -------------------- |
+| Shift+Arrows | Extend selection     |
+| Ctrl+A       | Select all           |
+| Ctrl+C       | Copy selection       |
+| Ctrl+X       | Cut selection        |
+| Ctrl+V       | Paste from clipboard |
+| Esc          | Clear selection      |
 
 </details>
 
@@ -235,6 +239,7 @@ arc/
 ├── .config/arceditor/
 └── CMakeLists.txt
 ```
+
 </details>
 
 See [build.md](build.md) for advanced setup and troubleshooting.
@@ -256,7 +261,8 @@ See [build.md](build.md) for advanced setup and troubleshooting.
 
 ## 👥 Community & Contributing
 
-💡 **Contributions welcome!**  
+💡 **Contributions welcome!**
+
 1. Fork & create a feature branch
 2. Follow [.gitmessage](.gitmessage) for commits
 3. Run tests before submitting
