@@ -390,14 +390,14 @@ int main(int argc, char *argv[])
 
     key = getch();
 
-    if (key == 'q' || key == 'Q')
-    {
-      //   if (editor.getMode() == EditorMode::NORMAL)
-      //   {
-      running = false;
-      continue;
-      //   }
-    }
+    // if (key == 'q' || key == 'Q')
+    // {
+    //   //   if (editor.getMode() == EditorMode::NORMAL)
+    //   //   {
+    //   running = false;
+    //   continue;
+    //   //   }
+    // }
 
     InputHandler::KeyResult result = inputHandler.handleKey(key);
 
@@ -430,9 +430,6 @@ int main(int argc, char *argv[])
   attrset(A_NORMAL);
   curs_set(1);
   endwin();
-  // #ifndef _win32
-  //   restoreSignalHandling();
-  // #endif
   return 0;
 }
 

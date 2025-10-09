@@ -894,7 +894,6 @@ int SyntaxHighlighter::getColorPairForCapture(
 }
 #endif
 
-// Color and attribute mapping (unchanged from original)
 int SyntaxHighlighter::getColorPairValue(const std::string &color_name) const
 {
   static const std::unordered_map<std::string, int> color_map = {
