@@ -35,7 +35,7 @@
 ## 🖥️ Demo
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/moisnx/arc/master/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="800"/>
+  <img src="https://raw.githubusercontent.com/moisnx/arc/master/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="650"/>
 </p>
 
 ---
