@@ -249,33 +249,36 @@ SyntaxHighlighter::getHighlightSpans(const std::string &line, int lineIndex,
     return cache_it->second;
   }
 
-  std::vector<ColorSpan> result;
-
-  // Special handling for Markdown block states
+  // Handle Markdown special states
   if (currentLanguage == "Markdown" && line_states_.count(lineIndex))
   {
     MarkdownState state = line_states_.at(lineIndex);
     if (state == MarkdownState::IN_FENCED_CODE_BLOCK)
     {
-      result = {{0, (int)line.length(),
-                 getColorPairValue("MARKDOWN_CODE_BLOCK"), A_NORMAL, 100}};
+      std::vector<ColorSpan> result = {
+          {0, (int)line.length(), getColorPairValue("MARKDOWN_CODE_BLOCK"),
+           A_NORMAL, 100}};
       line_cache_[lineIndex] = result;
       return result;
     }
     else if (state == MarkdownState::IN_BLOCKQUOTE)
     {
-      result = {{0, (int)line.length(),
-                 getColorPairValue("MARKDOWN_BLOCKQUOTE"), A_NORMAL, 90}};
+      std::vector<ColorSpan> result = {
+          {0, (int)line.length(), getColorPairValue("MARKDOWN_BLOCKQUOTE"),
+           A_NORMAL, 90}};
       line_cache_[lineIndex] = result;
       return result;
     }
   }
 
+  std::vector<ColorSpan> result;
+
 #ifdef TREE_SITTER_ENABLED
-  // CRITICAL: Ensure tree is up to date BEFORE querying
-  if (current_ts_query_ && current_buffer_content_.empty())
+  // CRITICAL: Do lazy reparse if needed
+  if (tree_needs_reparse_)
   {
     const_cast<SyntaxHighlighter *>(this)->updateTree(buffer);
+    const_cast<SyntaxHighlighter *>(this)->tree_needs_reparse_ = false;
   }
 
   if (current_ts_query_ && tree_)
@@ -303,7 +306,6 @@ SyntaxHighlighter::getHighlightSpans(const std::string &line, int lineIndex,
   line_cache_[lineIndex] = result;
   return result;
 }
-
 void SyntaxHighlighter::updateTreeAfterEdit(
     const GapBuffer &buffer, size_t byte_pos, size_t old_byte_len,
     size_t new_byte_len, uint32_t start_row, uint32_t start_col,
@@ -314,7 +316,7 @@ void SyntaxHighlighter::updateTreeAfterEdit(
   if (!tree_ || !parser_)
     return;
 
-  // Apply edit to tree
+  // Apply incremental edit to tree structure
   TSInputEdit edit = {.start_byte = (uint32_t)byte_pos,
                       .old_end_byte = (uint32_t)(byte_pos + old_byte_len),
                       .new_end_byte = (uint32_t)(byte_pos + new_byte_len),
@@ -323,36 +325,22 @@ void SyntaxHighlighter::updateTreeAfterEdit(
                       .new_end_point = {new_end_row, new_end_col}};
 
   ts_tree_edit(tree_, &edit);
+  tree_version_++;
 
-  // Get fresh content from buffer
-  std::string content;
-  int lineCount = buffer.getLineCount();
-  for (int i = 0; i < lineCount; i++)
-  {
-    if (i > 0)
-      content += "\n";
-    content += buffer.getLine(i);
-  }
+  // Mark that tree needs reparsing (will happen on next query)
+  tree_needs_reparse_ = true;
 
-  // Reparse immediately with old tree
-  TSTree *old_tree = tree_;
-  tree_ = ts_parser_parse_string(parser_, old_tree, content.c_str(),
-                                 content.length());
-
-  if (tree_)
+  // For very large changes, schedule background reparse
+  if (old_end_row != new_end_row && (new_end_row - old_end_row) > 10)
   {
-    current_buffer_content_ = content;
-    if (old_tree)
-    {
-      ts_tree_delete(old_tree);
-    }
-  }
-  else
-  {
-    std::cerr << "ERROR: Reparse failed after edit\n";
-    tree_ = old_tree; // Keep old tree rather than crash
+    scheduleBackgroundParse(buffer);
   }
 #endif
+}
+
+void SyntaxHighlighter::invalidateLineCache(int lineNum)
+{
+  line_cache_.erase(lineNum);
 }
 
 void SyntaxHighlighter::bufferChanged(const GapBuffer &buffer)
@@ -574,7 +562,6 @@ void SyntaxHighlighter::notifyEdit(size_t byte_pos, size_t old_byte_len,
 #ifdef TREE_SITTER_ENABLED
   if (!tree_)
   {
-    std::cerr << "WARNING: notifyEdit called but no tree exists\n";
     return;
   }
 
@@ -589,44 +576,43 @@ void SyntaxHighlighter::notifyEdit(size_t byte_pos, size_t old_byte_len,
 
   // CRITICAL FIX: Mark that we need to reparse on next access
   // This forces updateTree() to be called on next getHighlightSpans()
-  current_buffer_content_.clear();
+  // current_buffer_content_.clear();
 #endif
 }
 
 void SyntaxHighlighter::invalidateLineRange(int startLine, int endLine)
 {
-  // ALWAYS clear from startLine onwards for structural changes
-  // The "optimization" of only clearing > 5 lines was causing the bug
+  // OPTIMIZATION: Only invalidate affected lines, not entire cache
 
-  auto it = line_cache_.begin();
-  while (it != line_cache_.end())
+  // For single-line changes, only clear that line
+  if (endLine - startLine <= 3)
   {
-    if (it->first >= startLine)
+    for (int i = startLine; i <= endLine; ++i)
     {
-      it = line_cache_.erase(it);
+      line_cache_.erase(i);
+      line_states_.erase(i);
     }
-    else
-    {
-      ++it;
-    }
+    return;
   }
 
-  // Also clear markdown states from this line onwards
-  auto state_it = line_states_.begin();
-  while (state_it != line_states_.end())
+  // For multi-line changes, clear from startLine onwards
+  auto cache_it = line_cache_.lower_bound(startLine);
+  if (cache_it != line_cache_.end())
   {
-    if (state_it->first >= startLine)
-    {
-      state_it = line_states_.erase(state_it);
-    }
-    else
-    {
-      ++state_it;
-    }
+    line_cache_.erase(cache_it, line_cache_.end());
   }
 
-  // Signal tree needs rebuild
-  current_buffer_content_.clear();
+  auto state_it = line_states_.lower_bound(startLine);
+  if (state_it != line_states_.end())
+  {
+    line_states_.erase(state_it, line_states_.end());
+  }
+
+  // DON'T clear buffer content unless structural change
+  if (endLine - startLine > 10)
+  {
+    current_buffer_content_.clear(); // Force reparse on next access
+  }
 }
 
 void SyntaxHighlighter::updateTree(const GapBuffer &buffer)
@@ -1123,8 +1109,19 @@ void SyntaxHighlighter::scheduleBackgroundParse(const GapBuffer &buffer)
   if (is_parsing_ || !parser_ || !current_ts_language_)
     return;
 
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     now - last_parse_time_)
+                     .count();
+
+  if (elapsed < 500)
+    return;
+
+  // Copy content BEFORE starting thread
   std::string content;
   int lineCount = buffer.getLineCount();
+  content.reserve(lineCount * 80);
+
   for (int i = 0; i < lineCount; i++)
   {
     if (i > 0)
@@ -1136,27 +1133,49 @@ void SyntaxHighlighter::scheduleBackgroundParse(const GapBuffer &buffer)
     return;
 
   is_parsing_ = true;
-  parse_complete_ = false;
+  last_parse_time_ = now;
+
+  // NEW: Capture current version
+  uint64_t expected_version = tree_version_.load();
+
+  // Create a COPY of parser state to avoid races
+  TSParser *temp_parser = ts_parser_new();
+  if (!ts_parser_set_language(temp_parser, current_ts_language_))
+  {
+    ts_parser_delete(temp_parser);
+    is_parsing_ = false;
+    return;
+  }
 
   parse_thread_ = std::thread(
-      [this, content]() // Capture by value
+      [this, content, temp_parser, expected_version]() mutable
       {
         TSTree *new_tree = ts_parser_parse_string(
-            parser_, nullptr, content.c_str(), content.length());
+            temp_parser, nullptr, content.c_str(), content.length());
 
         if (new_tree)
         {
-          std::lock_guard<std::mutex> lock(tree_mutex_); // LOCK ADDED
+          std::lock_guard<std::mutex> lock(tree_mutex_);
 
-          TSTree *old_tree = tree_;
-          tree_ = new_tree;
-          current_buffer_content_ = content;
-          is_full_parse_ = true;
+          // NEW: Only update if no newer edits happened
+          if (tree_version_.load() == expected_version)
+          {
+            TSTree *old_tree = tree_;
+            tree_ = new_tree;
+            current_buffer_content_ = std::move(content);
+            is_full_parse_ = true;
 
-          if (old_tree)
-            ts_tree_delete(old_tree);
+            if (old_tree)
+              ts_tree_delete(old_tree);
+          }
+          else
+          {
+            // Discard stale parse - user has made newer edits
+            ts_tree_delete(new_tree);
+          }
         }
 
+        ts_parser_delete(temp_parser);
         is_parsing_ = false;
         parse_complete_ = true;
       });

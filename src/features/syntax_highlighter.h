@@ -65,6 +65,9 @@ public:
     return std::to_string(std::hash<std::string>{}(content));
   };
   void invalidateLineRange(int startLine, int endLine);
+
+  void invalidateLineCache(int lineNum);
+
   void notifyEdit(size_t byte_pos, size_t old_byte_len, size_t new_byte_len,
                   uint32_t start_row, uint32_t start_col, uint32_t old_end_row,
                   uint32_t old_end_col, uint32_t new_end_row,
@@ -96,7 +99,9 @@ private:
   std::atomic<bool> is_parsing_{false};
   std::atomic<bool> parse_complete_{false};
   mutable std::mutex tree_mutex_;
+  mutable bool tree_needs_reparse_ = false;
 
+  std::atomic<uint64_t> tree_version_{0};
   void backgroundParse(const GapBuffer &buffer);
 
   // Markdown state tracking
@@ -108,6 +113,9 @@ private:
   mutable std::unordered_map<int, bool> line_highlight_pending_;
   mutable std::unordered_set<int> priority_lines_;
   std::vector<uint32_t> line_byte_offsets_; // Cached byte offsets for each line
+
+  std::chrono::steady_clock::time_point last_parse_time_;
+  static constexpr int PARSE_DEBOUNCE_MS = 500;
 
 #ifdef TREE_SITTER_ENABLED
   // Tree-sitter state

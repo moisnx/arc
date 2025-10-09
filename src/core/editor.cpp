@@ -333,18 +333,14 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
-// In editor.cpp - Modified display() function
 void Editor::display()
 {
+  // Validate state
   if (!validateEditorState())
   {
-    std::cerr << "DISPLAY ERROR: Invalid state detected!" << std::endl;
     validateCursorAndViewport();
     if (!validateEditorState())
-    {
-      std::cerr << "CRITICAL: Could not fix invalid state!" << std::endl;
       return;
-    }
   }
 
   int rows, cols;
@@ -357,13 +353,15 @@ void Editor::display()
   int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
   int contentWidth = cols - contentStartCol;
 
-  int endLine = viewportTop + viewportHeight;
-  if (endLine > buffer.getLineCount())
+  int endLine = std::min(viewportTop + viewportHeight, buffer.getLineCount());
+
+  // OPTIMIZATION: Pre-mark viewport lines for priority parsing
+  if (syntaxHighlighter)
   {
-    endLine = buffer.getLineCount();
+    syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
 
-  // Pre-compute selection bounds ONCE
+  // Pre-compute selection (unchanged)
   bool hasActiveSelection = (hasSelection || isSelecting);
   int sel_start_line = -1, sel_start_col = -1;
   int sel_end_line = -1, sel_end_col = -1;
@@ -377,14 +375,9 @@ void Editor::display()
     sel_end_col = end.second;
   }
 
-  if (syntaxHighlighter)
-  {
-    syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
-  }
-
   int currentTabSize = ConfigManager::getTabSize();
 
-  // Render lines
+  // OPTIMIZATION: Batch render - minimize attribute changes
   for (int i = viewportTop; i < endLine; i++)
   {
     int screenRow = i - viewportTop;
@@ -407,11 +400,11 @@ void Editor::display()
       addch(' ');
     }
 
-    attrset(COLOR_PAIR(0));
-
+    // Get line content
     std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
-    std::vector<ColorSpan> currentLineSpans;
 
+    // OPTIMIZATION: Get highlighting spans (cached if available)
+    std::vector<ColorSpan> currentLineSpans;
     if (syntaxHighlighter)
     {
       try
@@ -425,13 +418,12 @@ void Editor::display()
       }
     }
 
+    // Render line content (unchanged logic, but faster due to cached spans)
     bool lineHasSelection =
         hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
-
     int current_span_idx = 0;
     int num_spans = currentLineSpans.size();
 
-    // Content rendering
     for (int screenCol = 0; screenCol < contentWidth; screenCol++)
     {
       int fileCol = viewportLeft + screenCol;
@@ -440,10 +432,9 @@ void Editor::display()
       char ch = charExists ? expandedLine[fileCol] : ' ';
 
       if (charExists && (ch < 32 || ch > 126))
-      {
         ch = ' ';
-      }
 
+      // Selection check
       bool isSelected = false;
       if (lineHasSelection && charExists)
       {
@@ -492,14 +483,10 @@ void Editor::display()
               {
                 attron(COLOR_PAIR(span.colorPair));
                 if (span.attribute != 0)
-                {
                   attron(span.attribute);
-                }
                 addch(ch);
                 if (span.attribute != 0)
-                {
                   attroff(span.attribute);
-                }
                 attroff(COLOR_PAIR(span.colorPair));
                 colorApplied = true;
               }
@@ -519,6 +506,7 @@ void Editor::display()
     clrtoeol();
   }
 
+  // Clear remaining lines
   attrset(COLOR_PAIR(0));
   for (int i = endLine - viewportTop; i < viewportHeight; i++)
   {
@@ -528,12 +516,8 @@ void Editor::display()
 
   drawStatusBar();
   positionCursor();
-
-  // REMOVED: positionCursor() call
-  // Cursor positioning now happens AFTER doupdate() in main loop
 }
 
-// Also fix the drawStatusBar function
 void Editor::drawStatusBar()
 {
   int rows, cols;
@@ -1164,15 +1148,9 @@ void Editor::insertChar(char ch)
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
     return;
 
-  // === DUAL SYSTEM: Support both old and new undo ===
-
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    // NEW: Delta-based undo
-    EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForInsertChar(ch);
-
-    // Perform the edit
     std::string line = buffer.getLine(cursorLine);
     if (cursorCol > static_cast<int>(line.length()))
       cursorCol = line.length();
@@ -1182,58 +1160,56 @@ void Editor::insertChar(char ch)
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
     line.insert(cursorCol, 1, ch);
     buffer.replaceLine(cursorLine, line);
+    cursorCol++;
 
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1, cursorLine,
-                                             cursorCol, cursorLine, cursorCol,
-                                             cursorLine, cursorCol + 1);
-      syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, 1, cursorLine, cursorCol - 1, cursorLine,
+          cursorCol - 1, cursorLine, cursorCol);
+
+      // NEW: Always invalidate cache after edit
+      syntaxHighlighter->invalidateLineCache(cursorLine);
     }
 
-    cursorCol++;
-
-    // Update viewport if needed
+    // Update viewport
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
-    int lineNumWidth = std::to_string(buffer.getLineCount()).length();
-    int contentWidth = cols - lineNumWidth - 3;
+    bool show_line_numbers = ConfigManager::getLineNumbers();
+    int lineNumWidth =
+        show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
+    int contentWidth = cols - (show_line_numbers ? (lineNumWidth + 3) : 0);
+
     if (contentWidth > 0 && cursorCol >= viewportLeft + contentWidth)
     {
       viewportLeft = cursorCol - contentWidth + 1;
     }
 
-    // Complete delta with post-state
+    // Complete delta
     delta.postCursorLine = cursorLine;
     delta.postCursorCol = cursorCol;
     delta.postViewportTop = viewportTop;
     delta.postViewportLeft = viewportLeft;
 
-    // Validate and add delta
-    EditorSnapshot after = captureSnapshot();
-    ValidationResult valid = validateState("After insertChar");
+    addDelta(delta);
 
-    if (valid)
+    // FIX: Auto-commit on timeout OR boundary characters for immediate
+    // highlighting
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       now - currentDeltaGroup_.timestamp)
+                       .count();
+
+    // Boundary characters that should trigger immediate commit
+    bool is_boundary_char =
+        (ch == '>' || ch == ')' || ch == '}' || ch == ']' || ch == ';' ||
+         ch == ',' || ch == ' ' || ch == '\t' || ch == '<' || ch == '(' ||
+         ch == '{' || ch == '[');
+
+    if (elapsed > UNDO_GROUP_TIMEOUT_MS || is_boundary_char)
     {
-      addDelta(delta);
-
-      // Auto-commit after timeout
-      auto now = std::chrono::steady_clock::now();
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         now - currentDeltaGroup_.timestamp)
-                         .count();
-
-      if (elapsed > UNDO_GROUP_TIMEOUT_MS)
-      {
-        commitDeltaGroup();
-        beginDeltaGroup();
-      }
-    }
-    else
-    {
-      std::cerr << "VALIDATION FAILED in insertChar, delta discarded\n";
-      std::cerr << valid.error << "\n";
-      std::cerr << "Changes: " << compareSnapshots(before, after) << "\n";
+      commitDeltaGroup();
+      beginDeltaGroup();
     }
 
     markModified();
@@ -1243,7 +1219,6 @@ void Editor::insertChar(char ch)
     // OLD: Full-state undo (fallback)
     saveState();
 
-    // Same edit code as above
     std::string line = buffer.getLine(cursorLine);
     if (cursorCol > static_cast<int>(line.length()))
       cursorCol = line.length();
@@ -1280,21 +1255,29 @@ void Editor::insertNewline()
 {
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    // NEW: Delta-based undo
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForNewline();
 
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
-                                    cursorLine, cursorCol, cursorLine + 1, 0);
-    }
-
+    // 1. MODIFY BUFFER FIRST
     splitLineAtCursor();
     cursorLine++;
     cursorCol = 0;
+
+    // 2. THEN notify Tree-sitter AFTER buffer change
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, 1,                  // Inserted 1 byte (newline)
+          delta.preCursorLine, delta.preCursorCol, // OLD position
+          delta.preCursorLine, delta.preCursorCol, cursorLine,
+          0); // NEW position
+
+      // Invalidate from split point onwards
+      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
+                                             buffer.getLineCount() - 1);
+    }
 
     if (cursorLine >= viewportTop + viewportHeight)
     {
@@ -1312,7 +1295,6 @@ void Editor::insertNewline()
     if (valid)
     {
       addDelta(delta);
-
       // Newlines always commit the current group
       commitDeltaGroup();
       beginDeltaGroup();
@@ -1324,12 +1306,6 @@ void Editor::insertNewline()
     }
 
     markModified();
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
-                                             buffer.getLineCount() - 1);
-    }
   }
   else if (!isUndoRedoing)
   {
@@ -1338,15 +1314,18 @@ void Editor::insertNewline()
 
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(byte_pos, 0, 1, cursorLine, cursorCol,
-                                    cursorLine, cursorCol, cursorLine + 1, 0);
-    }
-
     splitLineAtCursor();
     cursorLine++;
     cursorCol = 0;
+
+    if (syntaxHighlighter && !isUndoRedoing)
+    {
+      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1,
+                                             cursorLine - 1, 0, cursorLine - 1,
+                                             0, cursorLine, 0);
+      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
+                                             buffer.getLineCount() - 1);
+    }
 
     if (cursorLine >= viewportTop + viewportHeight)
     {
@@ -1354,12 +1333,6 @@ void Editor::insertNewline()
     }
     viewportLeft = 0;
     markModified();
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine - 1,
-                                             buffer.getLineCount() - 1);
-    }
   }
 }
 
@@ -1367,53 +1340,44 @@ void Editor::deleteChar()
 {
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    // NEW: Delta-based undo
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForDeleteChar();
-
     std::string line = buffer.getLine(cursorLine);
 
     if (cursorCol < static_cast<int>(line.length()))
     {
       size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
-                                      cursorLine, cursorCol + 1, cursorLine,
-                                      cursorCol);
-      }
-
       line.erase(cursorCol, 1);
       buffer.replaceLine(cursorLine, line);
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, cursorLine,
+            cursorCol + 1, cursorLine, cursorCol);
+
+        // NEW: Always invalidate cache after edit
+        syntaxHighlighter->invalidateLineCache(cursorLine);
       }
     }
     else if (cursorLine < buffer.getLineCount() - 1)
     {
       size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
+      std::string nextLine = buffer.getLine(cursorLine + 1);
+      buffer.replaceLine(cursorLine, line + nextLine);
+      buffer.deleteLine(cursorLine + 1);
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        std::string nextLine = buffer.getLine(cursorLine + 1);
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
-                                      (uint32_t)line.length(), cursorLine + 1,
-                                      0, cursorLine, (uint32_t)line.length());
-      }
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, (uint32_t)line.length(),
+            cursorLine + 1, 0, cursorLine, (uint32_t)line.length());
 
-      joinLineWithNext();
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
         syntaxHighlighter->invalidateLineRange(cursorLine,
                                                buffer.getLineCount() - 1);
       }
     }
 
-    // Complete delta
     delta.postCursorLine = cursorLine;
     delta.postCursorCol = cursorCol;
     delta.postViewportTop = viewportTop;
@@ -1423,8 +1387,6 @@ void Editor::deleteChar()
     if (valid)
     {
       addDelta(delta);
-
-      // If we joined lines, commit group
       if (delta.operation == EditDelta::JOIN_LINES)
       {
         commitDeltaGroup();
@@ -1441,51 +1403,43 @@ void Editor::deleteChar()
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
     saveState();
-
     std::string line = buffer.getLine(cursorLine);
 
     if (cursorCol < static_cast<int>(line.length()))
     {
       size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol,
-                                      cursorLine, cursorCol + 1, cursorLine,
-                                      cursorCol);
-      }
-
       line.erase(cursorCol, 1);
       buffer.replaceLine(cursorLine, line);
-      markModified();
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, cursorLine,
+            cursorCol + 1, cursorLine, cursorCol);
+        // NEW: Always invalidate cache after edit
+        syntaxHighlighter->invalidateLineCache(cursorLine);
       }
+
+      markModified();
     }
     else if (cursorLine < buffer.getLineCount() - 1)
     {
       size_t byte_pos = buffer.lineColToPos(cursorLine, line.length());
+      std::string nextLine = buffer.getLine(cursorLine + 1);
+      buffer.replaceLine(cursorLine, line + nextLine);
+      buffer.deleteLine(cursorLine + 1);
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        std::string nextLine = buffer.getLine(cursorLine + 1);
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine,
-                                      (uint32_t)line.length(), cursorLine + 1,
-                                      0, cursorLine, (uint32_t)line.length());
-      }
-
-      joinLineWithNext();
-      markModified();
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, (uint32_t)line.length(),
+            cursorLine + 1, 0, cursorLine, (uint32_t)line.length());
         syntaxHighlighter->invalidateLineRange(cursorLine,
                                                buffer.getLineCount() - 1);
       }
+
+      markModified();
     }
   }
 }
@@ -1494,52 +1448,39 @@ void Editor::backspace()
 {
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    // NEW: Delta-based undo
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForBackspace();
 
     if (cursorCol > 0)
     {
-      // Delete character before cursor
-      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
       std::string line = buffer.getLine(cursorLine);
+      size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
+      line.erase(cursorCol - 1, 1);
+      buffer.replaceLine(cursorLine, line);
+      cursorCol--;
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
-                                      cursorLine, cursorCol, cursorLine,
-                                      cursorCol - 1);
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, cursorLine,
+            cursorCol + 1, cursorLine, cursorCol);
+
+        // NEW: Always invalidate cache after edit
+        syntaxHighlighter->invalidateLineCache(cursorLine);
       }
 
-      line.erase(cursorCol - 1, 1);
-      buffer.replaceLine(cursorLine, line);
-
-      cursorCol--;
       if (cursorCol < viewportLeft)
       {
         viewportLeft = cursorCol;
       }
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
-      }
     }
     else if (cursorLine > 0)
     {
-      // Join with previous line
       std::string currentLine = buffer.getLine(cursorLine);
       std::string prevLine = buffer.getLine(cursorLine - 1);
-
       size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
 
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->notifyEdit(
-            byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
-            cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
-      }
-
+      int oldCursorLine = cursorLine;
       cursorCol = static_cast<int>(prevLine.length());
       cursorLine--;
 
@@ -1548,12 +1489,15 @@ void Editor::backspace()
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, oldCursorLine, 0,
+            cursorLine, cursorCol);
+
         syntaxHighlighter->invalidateLineRange(cursorLine,
                                                buffer.getLineCount() - 1);
       }
     }
 
-    // Complete delta
     delta.postCursorLine = cursorLine;
     delta.postCursorCol = cursorCol;
     delta.postViewportTop = viewportTop;
@@ -1563,8 +1507,6 @@ void Editor::backspace()
     if (valid)
     {
       addDelta(delta);
-
-      // If we joined lines, commit group
       if (delta.operation == EditDelta::JOIN_LINES)
       {
         commitDeltaGroup();
@@ -1581,33 +1523,28 @@ void Editor::backspace()
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
     saveState();
 
     if (cursorCol > 0)
     {
       size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol - 1);
       std::string line = buffer.getLine(cursorLine);
+      line.erase(cursorCol - 1, 1);
+      buffer.replaceLine(cursorLine, line);
+      cursorCol--;
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
-        syntaxHighlighter->notifyEdit(byte_pos, 1, 0, cursorLine, cursorCol - 1,
-                                      cursorLine, cursorCol, cursorLine,
-                                      cursorCol - 1);
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, cursorLine,
+            cursorCol + 1, cursorLine, cursorCol);
+        // NEW: Always invalidate cache after edit
+        syntaxHighlighter->invalidateLineCache(cursorLine);
       }
 
-      line.erase(cursorCol - 1, 1);
-      buffer.replaceLine(cursorLine, line);
-
-      cursorCol--;
       if (cursorCol < viewportLeft)
       {
         viewportLeft = cursorCol;
-      }
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->invalidateLineRange(cursorLine, cursorLine);
       }
 
       markModified();
@@ -1616,15 +1553,7 @@ void Editor::backspace()
     {
       std::string currentLine = buffer.getLine(cursorLine);
       std::string prevLine = buffer.getLine(cursorLine - 1);
-
       size_t byte_pos = buffer.lineColToPos(cursorLine - 1, prevLine.length());
-
-      if (syntaxHighlighter && !isUndoRedoing)
-      {
-        syntaxHighlighter->notifyEdit(
-            byte_pos, 1, 0, cursorLine - 1, (uint32_t)prevLine.length(),
-            cursorLine, 0, cursorLine - 1, (uint32_t)prevLine.length());
-      }
 
       cursorCol = static_cast<int>(prevLine.length());
       cursorLine--;
@@ -1634,6 +1563,9 @@ void Editor::backspace()
 
       if (syntaxHighlighter && !isUndoRedoing)
       {
+        syntaxHighlighter->updateTreeAfterEdit(
+            buffer, byte_pos, 1, 0, cursorLine, cursorCol, cursorLine + 1, 0,
+            cursorLine, cursorCol);
         syntaxHighlighter->invalidateLineRange(cursorLine,
                                                buffer.getLineCount() - 1);
       }
@@ -1656,19 +1588,19 @@ void Editor::deleteLine()
     std::string line = buffer.getLine(0);
     size_t byte_pos = 0;
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(byte_pos, line.length(), 0, 0, 0, 0,
-                                    (uint32_t)line.length(), 0, 0);
-    }
-
     buffer.replaceLine(0, "");
     cursorCol = 0;
 
     if (syntaxHighlighter && !isUndoRedoing)
     {
+      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, line.length(), 0,
+                                             0, 0, 0, (uint32_t)line.length(),
+                                             0, 0);
       syntaxHighlighter->invalidateLineRange(0, 0);
     }
+
+    // buffer.replaceLine(0, "");
+    // cursorCol = 0;
   }
   else
   {
@@ -1679,15 +1611,17 @@ void Editor::deleteLine()
     bool has_newline = (cursorLine < buffer.getLineCount() - 1);
     size_t delete_bytes = line_length + (has_newline ? 1 : 0);
 
+    buffer.deleteLine(cursorLine);
+
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->notifyEdit(byte_pos, delete_bytes, 0, cursorLine, 0,
-                                    cursorLine + (has_newline ? 1 : 0),
-                                    has_newline ? 0 : (uint32_t)line_length,
-                                    cursorLine, 0);
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, delete_bytes, 0, cursorLine, 0,
+          cursorLine + (has_newline ? 1 : 0),
+          has_newline ? 0 : (uint32_t)line_length, cursorLine, 0);
+      syntaxHighlighter->invalidateLineRange(cursorLine,
+                                             buffer.getLineCount() - 1);
     }
-
-    buffer.deleteLine(cursorLine);
 
     if (cursorLine >= buffer.getLineCount())
     {
@@ -1698,12 +1632,6 @@ void Editor::deleteLine()
     if (cursorCol > static_cast<int>(line.length()))
     {
       cursorCol = static_cast<int>(line.length());
-    }
-
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->invalidateLineRange(cursorLine,
-                                             buffer.getLineCount() - 1);
     }
   }
 
@@ -1722,7 +1650,6 @@ void Editor::deleteSelection()
 
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    // NEW: Delta-based undo
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForDeleteSelection();
 
@@ -1736,13 +1663,7 @@ void Editor::deleteSelection()
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
     size_t delete_bytes = end_byte - start_byte;
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
-                                    startCol, endLine, endCol, startLine,
-                                    startCol);
-    }
-
+    // 1. MODIFY BUFFER FIRST
     if (startLine == endLine)
     {
       std::string line = buffer.getLine(startLine);
@@ -1764,14 +1685,19 @@ void Editor::deleteSelection()
       }
     }
 
-    updateCursorAndViewport(startLine, startCol);
-    clearSelection();
-
+    // 2. THEN notify Tree-sitter AFTER buffer change
     if (syntaxHighlighter && !isUndoRedoing)
     {
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, start_byte, delete_bytes, 0, // Deleted bytes
+          startLine, startCol, endLine, endCol, startLine, startCol);
+
       syntaxHighlighter->invalidateLineRange(startLine,
                                              buffer.getLineCount() - 1);
     }
+
+    updateCursorAndViewport(startLine, startCol);
+    clearSelection();
 
     // Complete delta
     delta.postCursorLine = cursorLine;
@@ -1809,13 +1735,6 @@ void Editor::deleteSelection()
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
     size_t delete_bytes = end_byte - start_byte;
 
-    if (syntaxHighlighter && !isUndoRedoing)
-    {
-      syntaxHighlighter->notifyEdit(start_byte, delete_bytes, 0, startLine,
-                                    startCol, endLine, endCol, startLine,
-                                    startCol);
-    }
-
     if (startLine == endLine)
     {
       std::string line = buffer.getLine(startLine);
@@ -1837,15 +1756,18 @@ void Editor::deleteSelection()
       }
     }
 
-    updateCursorAndViewport(startLine, startCol);
-    clearSelection();
-    markModified();
-
     if (syntaxHighlighter && !isUndoRedoing)
     {
+      syntaxHighlighter->updateTreeAfterEdit(buffer, start_byte, delete_bytes,
+                                             0, startLine, startCol, endLine,
+                                             endCol, startLine, startCol);
       syntaxHighlighter->invalidateLineRange(startLine,
                                              buffer.getLineCount() - 1);
     }
+
+    updateCursorAndViewport(startLine, startCol);
+    clearSelection();
+    markModified();
   }
 }
 
@@ -2707,7 +2629,7 @@ void Editor::applyDeltaForward(const EditDelta &delta)
   validateCursorAndViewport();
 
   // Notify Tree-sitter BEFORE applying changes
-  notifyTreeSitterEdit(delta, false); // false = forward (redo)
+  // notifyTreeSitterEdit(delta, false); // false = forward (redo)
 
   switch (delta.operation)
   {

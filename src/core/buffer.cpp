@@ -369,7 +369,28 @@ void GapBuffer::deleteRange(size_t start, size_t length)
 void GapBuffer::insertLine(int lineNum, const std::string &line)
 {
   size_t pos = lineColToPos(lineNum, 0);
+  size_t lineLength = line.length() + 1; // +1 for newline
+
+  // Insert the text
   insertText(pos, line + "\n");
+
+  // OPTIMIZATION: Update line index incrementally instead of rebuilding
+  if (!lineIndexDirty && lineNum < static_cast<int>(lineIndex.size()))
+  {
+    // Insert new line offset at position lineNum + 1
+    lineIndex.insert(lineIndex.begin() + lineNum + 1, pos + lineLength);
+
+    // Shift all subsequent offsets by the length of inserted content
+    for (size_t i = lineNum + 2; i < lineIndex.size(); ++i)
+    {
+      lineIndex[i] += lineLength;
+    }
+  }
+  else
+  {
+    // Fallback: mark index as dirty for rebuild
+    invalidateLineIndex();
+  }
 }
 
 void GapBuffer::deleteLine(int lineNum)
@@ -381,12 +402,32 @@ void GapBuffer::deleteLine(int lineNum)
   size_t lineLength = getLineLength(lineNum);
 
   // Include the newline character if it exists
-  if (lineNum < getLineCount() - 1)
+  bool has_newline = (lineNum < getLineCount() - 1);
+  if (has_newline)
   {
-    lineLength++; // Include the newline
+    lineLength++;
   }
 
+  // Delete the range
   deleteRange(lineStart, lineLength);
+
+  // OPTIMIZATION: Update line index incrementally
+  if (!lineIndexDirty && lineNum + 1 < static_cast<int>(lineIndex.size()))
+  {
+    // Remove line offset at position lineNum + 1
+    lineIndex.erase(lineIndex.begin() + lineNum + 1);
+
+    // Shift all subsequent offsets back by the deleted length
+    for (size_t i = lineNum + 1; i < lineIndex.size(); ++i)
+    {
+      lineIndex[i] -= lineLength;
+    }
+  }
+  else
+  {
+    // Fallback: mark index as dirty for rebuild
+    invalidateLineIndex();
+  }
 }
 
 void GapBuffer::replaceLine(int lineNum, const std::string &newLine)

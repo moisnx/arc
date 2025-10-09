@@ -8,6 +8,7 @@ languages:
     builtin: true
     parser_name: "c"
     queries: ["treesitter/queries/c/highlights.scm"]
+    
   cpp:
     name: "C++"
     extensions: ["cpp", "cc", "cxx", "hpp", "hxx"]
