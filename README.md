@@ -1,86 +1,131 @@
-# Arc
+<!-- Banner / Logo -->
+<p align="center">
+  <img src="https://raw.githubusercontent.com/moisnx/arc/main/.github/assets/logo.png" alt="Arc Editor Logo" width="120" height="120"/>
+</p>
 
-A modern terminal-based text editor designed for simplicity and efficiency. Arc combines the accessibility of nano with contemporary features and a clean interface.
+<h1 align="center">Arc Editor</h1>
+<p align="center"><b>Simple. Modern. Efficient.</b></p>
+<p align="center">
+  <em>A modern terminal-based text editor with Tree-sitter powered syntax highlighting.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/moisnx/arc/actions"><img src="https://img.shields.io/github/actions/workflow/status/moisnx/arc/ci.yml?branch=main&style=flat-square" alt="Build Status"></a>
+  <a href="https://github.com/moisnx/arc/blob/main/LICENSE"><img src="https://img.shields.io/github/license/moisnx/arc?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square" alt="Platforms">
+  <img src="https://img.shields.io/badge/editor%20type-terminal-informational?style=flat-square">
+</p>
+
+---
+
+> **Arc** combines the accessibility of nano with powerful features and a clean interface.
+
+---
 
 ## ✨ Features
 
-- **Intuitive Interface**: Clean, minimal design focused on your content
-- **Modern Editing**: Gap buffer implementation for efficient text operations
-- **Syntax Highlighting**: Built-in support for multiple programming languages
-- **Cross-Platform**: Runs on Windows, Linux, and macOS
-- **Lightweight**: Fast startup and minimal resource usage
-- **Customizable**: Configurable keybindings and color themes
+- **Intuitive Interface**: Minimal, focused on your content with smart viewport management
+- **Advanced Syntax Highlighting**: Tree-sitter powered, accurate AST-based coloring
+- **Modern Editing**: Gap buffer for efficient text ops, unlimited undo/redo
+- **Smart Selection**: Visual selection with copy, cut, paste
+- **Live Configuration**: Hot-reload themes and settings
+- **Cross-Platform**: Windows (PDCurses), Linux, macOS (NCurses)
+- **Lightweight**: Fast startup, minimal resource usage
+- **Customizable**: Multiple color themes, configurable behavior
 
+---
 
-## 🚀 Quick Start
+## 🖥️ Demo
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/moisnx/arc/main/.github/assets/screenshot.gif" alt="Arc Editor Demo" width="700"/>
+</p>
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-**Windows:**
-
-- Visual Studio 2019+ or MinGW-w64
-- CMake 3.16+
-- vcpkg (for PDCurses)
-
-**Linux/macOS:**
-
-- GCC 7+ or Clang 5+
-- CMake 3.16+
-- NCurses development libraries
+- **All Platforms:** CMake 3.16+, C++20 compiler, Git (for submodules)
+- **Linux:** `build-essential cmake libncurses5-dev libyaml-cpp-dev`
+- **macOS:** `cmake ncurses yaml-cpp` (via Homebrew)
+- **Windows:** Visual Studio 2019+ with vcpkg
 
 ### Installation
 
-#### Windows
+<details>
+  <summary><b>Linux/Ubuntu</b></summary>
 
 ```bash
-# Install PDCurses via vcpkg
-vcpkg install pdcurses
-
-# Build Arc
-git clone https://github.com/yourusername/arc.git
+sudo apt install build-essential cmake libncurses5-dev libyaml-cpp-dev
+git clone --recursive https://github.com/moisnx/arc.git
 cd arc
 mkdir build && cd build
-cmake ..
-cmake --build . --config Release
-```
-
-#### Linux/Ubuntu
-
-```bash
-# Install dependencies
-sudo apt install build-essential cmake libncurses5-dev
-
-# Build Arc
-git clone https://github.com/yourusername/arc.git
-cd arc
-mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
+./arc
 ```
+</details>
 
-#### macOS
+<details>
+  <summary><b>macOS</b></summary>
 
 ```bash
-# Install dependencies
-brew install cmake ncurses
-
-# Build Arc
-git clone https://github.com/yourusername/arc.git
+brew install cmake ncurses yaml-cpp
+git clone --recursive https://github.com/moisnx/arc.git
 cd arc
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(sysctl -n hw.ncpu)
+./arc
 ```
+</details>
 
-## 🎯 Usage
+<details>
+  <summary><b>Windows</b></summary>
 
-### Basic Commands
+```powershell
+git clone https://github.com/microsoft/vcpkg.git C:\tools\vcpkg
+cd C:\tools\vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg integrate install
+.\vcpkg install pdcurses:x64-windows-static yaml-cpp:x64-windows-static
+
+git clone --recursive https://github.com/moisnx/arc.git
+cd arc
+mkdir build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/tools/vcpkg/scripts/buildsystems/vcpkg.cmake `
+         -DVCPKG_TARGET_TRIPLET=x64-windows-static
+cmake --build . --config Release
+.\Release\arc.exe
+```
+</details>
+
+> **Note:** Forgot `--recursive`? Run `git submodule update --init --recursive`
+
+---
+
+## 📂 Supported Languages
+
+- **C/C++**
+- **Python**
+- **Rust**
+- **JavaScript/TypeScript** (incl. JSX/TSX)
+- **Markdown** (with inline code)
+- **Go**
+- **Zig**
+
+---
+
+## 🎮 Usage
 
 ```bash
 # Open a file
 arc filename.txt
 
-# Open Arc without a file
+# Start with empty buffer
 arc
 
 # View help
@@ -89,146 +134,155 @@ arc --help
 
 ### Key Bindings
 
-| Key            | Action     |
-| -------------- | ---------- |
-| `Ctrl+S`       | Save file  |
-| `Ctrl+O`       | Open file  |
-| `Ctrl+X`       | Exit       |
-| `Ctrl+G`       | Show help  |
-| `Ctrl+W`       | Search     |
-| `Ctrl+K`       | Cut line   |
-| `Ctrl+U`       | Paste      |
-| `Ctrl+L`       | Go to line |
-| `Arrow Keys`   | Navigate   |
-| `Page Up/Down` | Scroll     |
+<details>
+  <summary><b>Show Key Bindings</b></summary>
 
-### Configuration
+#### File Operations
+| Key      | Action                              |
+|----------|-------------------------------------|
+| Ctrl+S   | Save file                           |
+| Ctrl+Q   | Quit (with unsaved changes prompt)  |
 
-Arc looks for configuration files in:
+#### Editing
+| Key        | Action                        |
+|------------|------------------------------|
+| Ctrl+Z     | Undo                         |
+| Ctrl+Y     | Redo                         |
+| Backspace  | Delete char before cursor    |
+| Delete     | Delete char at cursor        |
+| Enter      | Insert new line              |
+| Tab        | Insert 4 spaces              |
 
-- **Windows**: `%APPDATA%/arc/`
-- **Linux/macOS**: `~/.config/arc/`
+#### Navigation
+| Key         | Action                 |
+|-------------|-----------------------|
+| Arrow Keys  | Move cursor           |
+| Home/End    | Line start/end        |
+| PgUp/PgDn   | Scroll viewport       |
 
-#### Example `keybinds.conf`
+#### Selection
+| Key           | Action              |
+|---------------|---------------------|
+| Shift+Arrows  | Extend selection    |
+| Ctrl+A        | Select all          |
+| Ctrl+C        | Copy selection      |
+| Ctrl+X        | Cut selection       |
+| Ctrl+V        | Paste from clipboard|
+| Esc           | Clear selection     |
 
-```ini
-# Custom keybindings
-save=Ctrl+S
-open=Ctrl+O
-exit=Ctrl+X
-help=F1
+</details>
+
+---
+
+## ⚙️ Configuration
+
+Arc auto-creates config files on first run:
+
+- Linux/macOS: `~/.config/arceditor/`
+- Windows: `%APPDATA%\arceditor\`
+
+#### Example: `config.yaml`
+
+```yaml
+appearance:
+  theme: default
+
+editor:
+  tab_size: 4
+  line_numbers: true
+  cursor_style: auto
+
+syntax:
+  highlighting: viewport
 ```
+
+#### Themes
+
+- 14 built-in themes.
+- Add custom themes in `.config/arceditor/themes/`.
+- Supports hex, 256-color, and named colors.
+- **Hot-reload:** Changes are auto-reloaded.
+
+```yaml
+# mytheme.theme
+name: "My Theme"
+background: "#1e1e2e"
+foreground: "#cdd6f4"
+keyword: "#cba6f7"
+string_literal: "#a6e3a1"
+comment: "#6c7086"
+# ... see existing themes for all options
+```
+
+---
 
 ## 🛠️ Development
 
-### Building from Source
-
-1. **Clone the repository**
-
-   ```bash
-   git clone https://github.com/yourusername/arc.git
-   cd arc
-   ```
-
-2. **Install dependencies** (see platform-specific instructions above)
-
-3. **Build**
-   ```bash
-   mkdir build && cd build
-   cmake ..
-   cmake --build .
-   ```
-
-### Project Structure
+<details>
+  <summary><b>Project Structure</b></summary>
 
 ```
 arc/
 ├── src/
-│   ├── core/           # Core editor functionality
-│   │   ├── editor.cpp
-│   │   ├── editor.h
-│   │   ├── gap_buffer.cpp
-│   │   └── gap_buffer.h
-│   ├── features/       # Advanced features
-│   │   ├── syntax_highlighter.cpp
-│   │   └── syntax_highlighter.h
-│   ├── ui/            # User interface components
-│   │   ├── colors.cpp
-│   │   ├── colors.h
-│   │   ├── display.cpp
-│   │   └── display.h
-│   └── main.cpp       # Application entry point
-├── config/            # Default configuration files
-├── samples/           # Example files for testing
-└── CMakeLists.txt     # Build configuration
+│   ├── core/
+│   ├── features/
+│   ├── ui/
+│   └── main.cpp
+├── deps/                  # Git submodules: tree-sitter, efsw, etc.
+├── treesitter/
+│   ├── languages.yaml
+│   └── queries/
+├── .config/arceditor/
+└── CMakeLists.txt
 ```
+</details>
 
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 🎨 Customization
-
-### Color Themes
-
-Arc supports custom color themes. Create a `theme.conf` file in your config directory:
-
-```ini
-# Arc Color Theme
-background=0
-foreground=7
-cursor=15
-selection_bg=4
-selection_fg=15
-line_numbers=8
-status_bar_bg=4
-status_bar_fg=15
-```
-
-### Language Support
-
-Currently supported languages:
-
-- C/C++
-- Python
-- JavaScript
-- Markdown
-- Plain text
-
-## 🐛 Known Issues
-
-- **Linux**: Minor cursor positioning inconsistencies during fast scrolling
-- **Linux**: Occasional input freezing in insert mode (working on fixes)
-
-## 📋 Roadmap
-
-- [ ] Plugin system
-- [ ] Multiple file tabs
-- [ ] Advanced search and replace
-- [ ] Git integration
-- [ ] LSP support
-- [ ] Configurable syntax highlighting
-- [ ] Mouse support improvements
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Inspired by nano, micro, and other terminal editors
-- Built with NCurses/PDCurses for cross-platform compatibility
-- Special thanks to the open-source community
-
-## Feedback
-
-- **Issues**: [GitHub Issues](https://github.com/moisnx/arc/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/moisnx/arc/discussions)
+See [build.md](build.md) for advanced setup and troubleshooting.
 
 ---
 
-**Arc** - Simple. Modern. Efficient.
+## 📈 Roadmap
+
+- [ ] Multiple file tabs/buffers
+- [ ] Advanced search/replace (regex)
+- [ ] Git integration (diff, blame)
+- [ ] LSP support
+- [ ] Plugin system
+- [ ] Mouse support enhancements
+- [ ] Split panes
+- [ ] Configurable keybindings
+
+---
+
+## 👥 Community & Contributing
+
+💡 **Contributions welcome!**  
+1. Fork & create a feature branch
+2. Follow [.gitmessage](.gitmessage) for commits
+3. Run tests before submitting
+4. Open a PR
+
+- **Issues:** [GitHub Issues](https://github.com/moisnx/arc/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/moisnx/arc/discussions)
+- **Docs:** [build.md](build.md) | [quickstart.md](quickstart.md)
+
+---
+
+## 📝 License
+
+MIT License – see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Tree-sitter](https://tree-sitter.github.io/)
+- [NCurses](https://invisible-island.net/ncurses/)
+- [PDCurses](https://github.com/Bill-Gray/PDCursesMod)
+- [EFSW](https://github.com/SpartanJ/efsw)
+- [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+- Inspired by nano, micro, and helix editors
+
+---
+
+<p align="center"><b>Arc Editor</b> – Simple. Modern. Efficient.</p>
