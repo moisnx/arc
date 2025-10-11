@@ -1,20 +1,37 @@
 name: "Catppuccin Mocha"
 
-# 💻 UI Colors
+# Core colors
 background: "#1E1E2E"
 foreground: "#CDD6F4"
+
+# State colors
+state_active: "#89DCEB"
+state_selected: "#45475A"
+state_hover: "#313244"
+state_disabled: "#6C7086"
+
+# Semantic UI colors
+ui_primary: "#89B4FA"
+ui_secondary: "#7F849C"
+ui_accent: "#CBA6F7"
+ui_success: "#A6E3A1"
+ui_warning: "#F9E2AF"
+ui_error: "#EBA0AC"
+ui_info: "#89DCEB"
+ui_border: "#313244"
+
+# Editor-specific
 cursor: "#B4BEFE"
-selection: "#45475A"
-line_highlight: "#313244"
 line_numbers: "#6C7086"
 line_numbers_active: "#89B4FA"
+line_highlight: "#313244"
 
-# 📊 Status Bar
+# Status bar
 status_bar_bg: "#313244"
 status_bar_fg: "#CDD6F4"
 status_bar_active: "#89DCEB"
 
-# ✨ Semantic categories
+# Syntax highlighting
 keyword: "#CBA6F7"
 string_literal: "#A6E3A1"
 number: "#94E2D5"
@@ -31,7 +48,7 @@ decorator: "#F5C2E7"
 macro: "#CBA6F7"
 label: "#CBA6F7"
 
-# 📝 Markup
+# Markup
 markup_heading: "#CBA6F7"
 markup_bold: "#F9E2AF"
 markup_italic: "#A6E3A1"

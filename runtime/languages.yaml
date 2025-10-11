@@ -2,71 +2,68 @@
 # This file defines all supported languages and their configurations
 
 languages:
+  html:
+    name: "HTML"
+    extensions: ['html']
+    parser_name: "html"
+    queries: ["runtime/queries/html/highlights.scm"]
   c:
     name: "C"
     extensions: ["c", "h"]
-    builtin: true
     parser_name: "c"
-    queries: ["treesitter/queries/c/highlights.scm"]
+    queries: ["runtime/queries/c/highlights.scm"]
     
   cpp:
     name: "C++"
     extensions: ["cpp", "cc", "cxx", "hpp", "hxx"]
-    builtin: true
     parser_name: "cpp"
-    queries: ["treesitter/queries/c/highlights.scm", "treesitter/queries/cpp/highlights.scm"]
+    queries: ["runtime/queries/c/highlights.scm", "runtime/queries/cpp/highlights.scm"]
     
   python:
     name: "Python"
     extensions: ["py", "pyw", "pyi"]
-    builtin: true
     parser_name: "python"
-    queries: ["treesitter/queries/python/highlights.scm",]
+    queries: ["runtime/queries/python/highlights.scm",]
     
   rust:
     name: "Rust"
     extensions: ["rs"]
-    builtin: true
     parser_name: "rust"
-    queries: ["treesitter/queries/rust/highlights.scm"]
+    queries: ["runtime/queries/rust/highlights.scm"]
     
   markdown:
     name: "Markdown"
     extensions: ["md", "markdown", "mdown", "mkd"]
     builtin: true
     parser_name: "markdown"
-    queries: ["treesitter/queries/markdown/highlights.scm", "treesitter/queries/markdown/injections.scm"]
+    queries: ["runtime/queries/markdown/highlights.scm", "runtime/queries/markdown/injections.scm"]
     
   javascript:
     name: "JavaScript"
     extensions: ["js", "mjs", "jsx"]
-    builtin: true
     parser_name: "javascript"
-    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_javascript/highlights.scm", "treesitter/queries/_jsx/highlights.scm"]
+    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_javascript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
 
   typescript:
     name: "TypeScript"
     extensions: ["ts"]
-    builtin: true
     parser_name: "typescript"
-    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm"]
+    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm"]
   
   tsx:
     name: "Tsx"
     extensions: ["tsx"]
-    builtin: true
     parser_name: "tsx"
-    queries: ["treesitter/queries/ecma/highlights.scm", "treesitter/queries/_typescript/highlights.scm", "treesitter/queries/_jsx/highlights.scm"]
+    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
   
   zig:
     name: "Zig"
     extensions: ["zig", "zir", "zigr", "zon"]
-    builtin: true
     parser_name: "zig"
-    queries: ["treesitter/queries/zig/highlights.scm"]
+    queries: ["runtime/queries/zig/highlights.scm"]
 
   go:
     name: "Go"
     extensions: ["go"]
     parser_name: "go"
-    queries: ["treesitter/queries/go/highlights.scm"]
+    queries: ["runtime/queries/go/highlights.scm"]

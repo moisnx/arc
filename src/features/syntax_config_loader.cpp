@@ -228,7 +228,7 @@ bool SyntaxConfigLoader::loadAllLanguageConfigs(
     const std::string &config_directory)
 {
   // DEPRECATED: Check if registry.yaml exists first
-  std::string registry_path = "treesitter/languages.yaml";
+  std::string registry_path = "runtime/languages.yaml";
 
   // std::cerr << "Registry path: " << registry_path << std::endl;
 

@@ -1,0 +1,62 @@
+name: "Cyberpunk Neon"
+
+# Core colors
+background: "#000000"
+foreground: "#E0E0E0"
+
+# State colors
+state_active: "#00FFFF"
+state_selected: "#1A1A1A"
+state_hover: "#111111"
+state_disabled: "#555555"
+
+# Semantic UI colors
+ui_primary: "#00FFFF"
+ui_secondary: "#808080"
+ui_accent: "#FF00FF"
+ui_success: "#39FF14"
+ui_warning: "#FFCC00"
+ui_error: "#FF00FF"
+ui_info: "#00FFFF"
+ui_border: "#1A1A1A"
+
+# Editor-specific
+cursor: "#00FFFF"
+line_numbers: "#555555"
+line_numbers_active: "#FF00FF"
+line_highlight: "#111111"
+
+# Status bar
+status_bar_bg: "#111111"
+status_bar_fg: "#E0E0E0"
+status_bar_active: "#00FFFF"
+
+# Syntax highlighting
+keyword: "#FF00FF"
+string_literal: "#39FF14"
+number: "#00FFFF"
+comment: "#808080"
+function_name: "#FF6EC7"
+variable: "#E0E0E0"
+type: "#FFCC00"
+operator: "#FF00FF"
+punctuation: "#E0E0E0"
+constant: "#FFCC00"
+namespace: "#00FFFF"
+property: "#E0E0E0"
+decorator: "#FF6EC7"
+macro: "#FF00FF"
+label: "#FF00FF"
+
+# Markup
+markup_heading: "#FF00FF"
+markup_bold: "#FFCC00"
+markup_italic: "#39FF14"
+markup_code: "#00FFFF"
+markup_code_block: "#00FFFF"
+markup_link: "#FF6EC7"
+markup_url: "#00FFFF"
+markup_list: "#39FF14"
+markup_blockquote: "#808080"
+markup_strikethrough: "#FF00FF"
+markup_quote: "#808080"

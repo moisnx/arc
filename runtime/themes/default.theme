@@ -6,20 +6,20 @@ background: "transparent"
 foreground: "#C9D1D9"
 
 # State colors - reusable across ALL UI components
-state_active: "#58A6FF"    
-state_selected: "#264F78"   
-state_hover: "#161B22"      
-state_disabled: "#6E7681"    
+state_active: "#58A6FF"      # Focused/active element (tabs, inputs, selections)
+state_selected: "#264F78"    # Selected items (file browser, search results)
+state_hover: "#161B22"       # Hover/highlight (current line, hover state)
+state_disabled: "#6E7681"    # Disabled/dimmed elements
 
 # Semantic UI colors - reusable by meaning
-ui_primary: "#58A6FF"        
-ui_secondary: "#8B949E"      
-ui_accent: "#D2A8FF"        
-ui_success: "#7EE787"        
-ui_warning: "#E3B341"        
-ui_error: "#FF7B72"         
-ui_info: "#79C0FF"           
-ui_border: "#30363D"      
+ui_primary: "#58A6FF"        # Primary actions, links, important buttons
+ui_secondary: "#8B949E"      # Secondary text, metadata, less important info
+ui_accent: "#D2A8FF"         # Special items, decorators, unique elements
+ui_success: "#7EE787"        # Success states, executables, positive actions
+ui_warning: "#E3B341"        # Warnings, modified indicators, caution
+ui_error: "#FF7B72"          # Errors, dangerous actions, critical issues
+ui_info: "#79C0FF"           # Info, directories, neutral metadata
+ui_border: "#30363D"         # Borders, separators, dividers
 
 # Editor-specific
 cursor: "#FFFFFF"

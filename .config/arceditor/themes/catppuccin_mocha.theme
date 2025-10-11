@@ -1,0 +1,62 @@
+name: "Catppuccin Mocha"
+
+# Core colors
+background: "#1E1E2E"
+foreground: "#CDD6F4"
+
+# State colors
+state_active: "#89DCEB"
+state_selected: "#45475A"
+state_hover: "#313244"
+state_disabled: "#6C7086"
+
+# Semantic UI colors
+ui_primary: "#89B4FA"
+ui_secondary: "#7F849C"
+ui_accent: "#CBA6F7"
+ui_success: "#A6E3A1"
+ui_warning: "#F9E2AF"
+ui_error: "#EBA0AC"
+ui_info: "#89DCEB"
+ui_border: "#313244"
+
+# Editor-specific
+cursor: "#B4BEFE"
+line_numbers: "#6C7086"
+line_numbers_active: "#89B4FA"
+line_highlight: "#313244"
+
+# Status bar
+status_bar_bg: "#313244"
+status_bar_fg: "#CDD6F4"
+status_bar_active: "#89DCEB"
+
+# Syntax highlighting
+keyword: "#CBA6F7"
+string_literal: "#A6E3A1"
+number: "#94E2D5"
+comment: "#7F849C"
+function_name: "#F5C2E7"
+variable: "#CDD6F4"
+type: "#F9E2AF"
+operator: "#EBA0AC"
+punctuation: "#CDD6F4"
+constant: "#F9E2AF"
+namespace: "#89DCEB"
+property: "#CDD6F4"
+decorator: "#F5C2E7"
+macro: "#CBA6F7"
+label: "#CBA6F7"
+
+# Markup
+markup_heading: "#CBA6F7"
+markup_bold: "#F9E2AF"
+markup_italic: "#A6E3A1"
+markup_code: "#94E2D5"
+markup_code_block: "#94E2D5"
+markup_link: "#F5C2E7"
+markup_url: "#F5C2E7"
+markup_list: "#A6E3A1"
+markup_blockquote: "#7F849C"
+markup_strikethrough: "#EBA0AC"
+markup_quote: "#7F849C"

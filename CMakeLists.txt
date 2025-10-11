@@ -98,9 +98,10 @@ if(TREE_SITTER_ENABLED)
     # Define parsers - use CMake lists instead of colon-separated strings
     # Format: list of pairs (lang_name, parser_path)
     set(PARSER_NAMES
-        "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx" "zig" "go"
+        "html" "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx" "zig" "go"
     )
     set(PARSER_PATHS
+        "${DEPS_DIR}/tree-sitter-html"
         "${DEPS_DIR}/tree-sitter-python"
         "${DEPS_DIR}/tree-sitter-c"
         "${DEPS_DIR}/tree-sitter-cpp"
@@ -345,8 +346,12 @@ if(WIN32)
     endif()
 endif()
 
-# Find packages - platform-specific approach
+# ----------------------------------------------------
+# 6. Find Curses - WITH WIDE CHARACTER SUPPORT
+# ----------------------------------------------------
+
 if(WIN32)
+    # Windows: Use PDCursesMod (already has UTF-8 support via VT mode)
     set(PDCURSESMOD_DIR ${DEPS_DIR}/PDCursesMod/wincon)
 
     if(EXISTS "${PDCURSESMOD_DIR}/pdcurses.lib")
@@ -360,39 +365,92 @@ if(WIN32)
 
         set(CURSES_LIBRARIES pdcursesmod)
         set(CURSES_INCLUDE_DIRS "${DEPS_DIR}/PDCursesMod")
+        message(STATUS "PDCursesMod supports UTF-8 via VT mode")
     else()
         message(FATAL_ERROR "PDCursesMod not found at ${PDCURSESMOD_DIR}. Please build it manually with nmake -f Makefile.vc HAVE_VT=Y")
     endif()
 
 elseif(ANDROID)
+    # Android: Try to find ncursesw first, fall back to ncurses
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(NCURSES REQUIRED ncurses)
-    set(CURSES_LIBRARIES ${NCURSES_LIBRARIES})
-    set(CURSES_INCLUDE_DIRS ${NCURSES_INCLUDE_DIRS})
+    pkg_check_modules(NCURSESW ncursesw)
+
+    if(NCURSESW_FOUND)
+        message(STATUS "Found ncursesw for Android")
+        set(CURSES_LIBRARIES ${NCURSESW_LIBRARIES})
+        set(CURSES_INCLUDE_DIRS ${NCURSESW_INCLUDE_DIRS})
+        set(CURSES_LINK_LIBRARIES ${NCURSESW_LINK_LIBRARIES})
+    else()
+        message(STATUS "ncursesw not found, falling back to ncurses")
+        pkg_check_modules(NCURSES REQUIRED ncurses)
+        set(CURSES_LIBRARIES ${NCURSES_LIBRARIES})
+        set(CURSES_INCLUDE_DIRS ${NCURSES_INCLUDE_DIRS})
+        set(CURSES_LINK_LIBRARIES ${NCURSES_LINK_LIBRARIES})
+    endif()
 
 else()
-    find_package(Curses REQUIRED)
-    set(CURSES_LIBRARIES ${CURSES_LIBRARIES})
-    set(CURSES_INCLUDE_DIRS ${CURSES_INCLUDE_DIR})
+    # Linux/macOS: Prefer ncursesw over ncurses
+    find_package(PkgConfig)
+
+    if(PkgConfig_FOUND)
+        # Try pkg-config first for ncursesw
+        pkg_check_modules(NCURSESW ncursesw)
+
+        if(NCURSESW_FOUND)
+            message(STATUS "Found ncursesw via pkg-config")
+            set(CURSES_LIBRARIES ${NCURSESW_LIBRARIES})
+            set(CURSES_INCLUDE_DIRS ${NCURSESW_INCLUDE_DIRS})
+            set(CURSES_LINK_FLAGS ${NCURSESW_LDFLAGS})
+        endif()
+    endif()
+
+    # If pkg-config didn't work, try FindCurses with wide character preference
+    if(NOT NCURSESW_FOUND)
+        set(CURSES_NEED_WIDE TRUE)
+        find_package(Curses REQUIRED)
+
+        # Verify we got wide character support
+        if(CURSES_HAVE_NCURSESW_NCURSES_H OR CURSES_HAVE_NCURSESW_H)
+            message(STATUS "Found ncursesw via FindCurses")
+        elseif(CURSES_HAVE_NCURSES_NCURSES_H OR CURSES_HAVE_NCURSES_H)
+            message(WARNING "Only found ncurses (not ncursesw). Unicode icons may not render correctly.")
+            message(WARNING "Install ncursesw: apt-get install libncursesw5-dev (Debian/Ubuntu)")
+        else()
+            message(STATUS "Found curses library: ${CURSES_LIBRARIES}")
+        endif()
+
+        set(CURSES_LIBRARIES ${CURSES_LIBRARIES})
+        set(CURSES_INCLUDE_DIRS ${CURSES_INCLUDE_DIR})
+    endif()
 endif()
 
 find_package(yaml-cpp CONFIG REQUIRED)
 
 # ----------------------------------------------------
-# 6. Main Executable
+# 7. Main Executable
 # ----------------------------------------------------
 
 # Source files
 set(SOURCES
     src/main.cpp
+    src/core/application.cpp
+    src/core/editor_loop.cpp
+    src/core/command_line.cpp
+    src/core/clipboard.cpp
     src/core/editor.cpp
     src/core/buffer.cpp
     src/core/config_manager.cpp
+    src/core/file_browser.cpp
+    src/core/signals/signal_handler.cpp
     src/ui/input_handler.cpp
-    # src/ui/renderer.cpp
     src/ui/style_manager.cpp
+    src/ui/icon_provider.cpp
+    src/ui/browser_renderer.cpp
     src/features/syntax_config_loader.cpp
     src/features/syntax_highlighter.cpp
+    src/benchmark/benchmark.cpp
+    src/modes/browser_mode.cpp
+    src/modes/editor_mode.cpp
 )
 
 # Create executable
@@ -419,6 +477,10 @@ if(WIN32)
     target_link_libraries(arc PRIVATE winmm)
 endif()
 
+if(ANDROID AND CURSES_LINK_LIBRARIES)
+    target_link_libraries(arc PRIVATE ${CURSES_LINK_LIBRARIES})
+endif()
+
 # Include directories
 target_include_directories(arc PRIVATE
     .
@@ -438,10 +500,6 @@ if(MSVC)
 else()
     target_compile_options(arc PRIVATE -Wall -Wextra)
 
-    if(ANDROID)
-        target_link_libraries(arc PRIVATE ${NCURSES_LINK_LIBRARIES})
-    endif()
-
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         target_compile_options(arc PRIVATE -g1 -O0 -fno-omit-frame-pointer)
     else()
@@ -450,7 +508,7 @@ else()
 endif()
 
 # ----------------------------------------------------
-# 7. Build Summary
+# 8. Build Summary
 # ----------------------------------------------------
 
 message(STATUS "")
@@ -461,6 +519,11 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Curses library: ${CURSES_LIBRARIES}")
+if(NCURSESW_FOUND OR CURSES_HAVE_NCURSESW_H OR CURSES_HAVE_NCURSESW_NCURSES_H)
+    message(STATUS "Wide character support: YES (ncursesw)")
+else()
+    message(STATUS "Wide character support: UNKNOWN (verify with ldd)")
+endif()
 message(STATUS "Tree-sitter enabled: ${TREE_SITTER_ENABLED}")
 if(TREE_SITTER_ENABLED)
     message(STATUS "  Tree-sitter libraries: ${TS_LIBRARIES}")

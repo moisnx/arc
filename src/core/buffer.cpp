@@ -525,21 +525,12 @@ void GapBuffer::replaceLine(int lineNum, const std::string &newLine)
 
 std::string GapBuffer::getText() const
 {
-  // Build line index ONCE if needed (for future getLine() calls)
-  if (lineIndexDirty)
-  {
-    rebuildLineIndex();
-  }
-
-  // The size of the final string *must* match textSize()
   size_t text_size = textSize();
   std::string result;
   result.reserve(text_size);
 
-  // Append text before gap
   result.append(buffer.data(), gapStart);
 
-  // Append text after gap
   size_t afterGapLength = text_size - gapStart;
   if (afterGapLength > 0 && gapEnd() < buffer.size())
   {
@@ -633,19 +624,38 @@ void GapBuffer::expandGap(size_t minSize)
 
 void GapBuffer::rebuildLineIndex() const
 {
+  // Clear and reserve space
   lineIndex.clear();
+
+  // Estimate number of lines (helps avoid reallocations)
+  size_t text_size = textSize();
+  size_t estimated_lines = (text_size / 50) + 10; // Assume ~50 chars per line
+  lineIndex.reserve(estimated_lines);
+
   lineIndex.push_back(0); // First line always starts at position 0
 
-  for (size_t pos = 0; pos < textSize(); ++pos)
+  size_t pos = 0;
+
+  // Scan before gap
+  for (size_t i = 0; i < gapStart; ++i)
   {
-    if (charAt(pos) == '\n')
+    if (buffer[i] == '\n')
     {
       lineIndex.push_back(pos + 1);
     }
+    pos++;
   }
 
-  // If the buffer doesn't end with a newline, we still have the last line
-  // The line index is already correct as we added positions after each newline
+  // Scan after gap
+  size_t afterGapStart = gapEnd();
+  for (size_t i = afterGapStart; i < buffer.size(); ++i)
+  {
+    if (buffer[i] == '\n')
+    {
+      lineIndex.push_back(pos + 1);
+    }
+    pos++;
+  }
 
   lineIndexDirty = false;
 }

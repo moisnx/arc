@@ -2,7 +2,7 @@
 name: "Tokyo Night (Semantic)"
 
 # Core colors
-background: "transparent"
+background: "#1A1B26"
 foreground: "#A9B1D6"
 
 # 🌟 State colors - Reusable across ALL UI components

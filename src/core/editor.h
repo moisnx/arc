@@ -7,7 +7,7 @@
 #ifdef _WIN32
 #include <curses.h>
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
 
 #include "buffer.h"
@@ -35,6 +35,22 @@ enum CursorMode
 class Editor
 {
 public:
+  struct RenderSpan
+  {
+    int start;       // Screen column start
+    int end;         // Screen column end
+    int colorPair;   // Color pair to use
+    int attribute;   // Attribute flags
+    bool isSelected; // Whether this span is selected
+  };
+
+  std::vector<RenderSpan>
+  buildRenderSpans(const std::string &line,
+                   const std::vector<ColorSpan> &highlightSpans,
+                   bool lineHasSelection, int sel_start_line, int sel_end_line,
+                   int sel_start_col, int sel_end_col, int currentLine,
+                   int viewportLeft, int contentWidth);
+
   // Core API
   Editor(SyntaxHighlighter *highlighter);
   void setSyntaxHighlighter(SyntaxHighlighter *highlighter);

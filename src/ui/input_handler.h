@@ -6,7 +6,7 @@
 #ifdef _WIN32
 #include <curses.h>
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
 
 class Editor;

@@ -1,5 +1,6 @@
 #include "editor.h"
 // #include "src/ui/colors.h"
+#include "src/core/clipboard.h"
 #include "src/core/config_manager.h"
 #include "src/ui/style_manager.h"
 #include <algorithm>
@@ -9,8 +10,9 @@
 #include <iostream>
 #ifdef _WIN32
 #include <curses.h>
+#include <windows.h>
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
 #include <iostream>
 #include <sstream>
@@ -28,6 +30,8 @@
 // =================================================================
 // Constructor
 // =================================================================
+
+// Clipboard::Clipboard();
 
 Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
 {
@@ -361,7 +365,7 @@ void Editor::display()
     syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
 
-  // Pre-compute selection (unchanged)
+  // Pre-compute selection
   bool hasActiveSelection = (hasSelection || isSelecting);
   int sel_start_line = -1, sel_start_col = -1;
   int sel_end_line = -1, sel_end_col = -1;
@@ -384,19 +388,20 @@ void Editor::display()
     bool isCurrentLine = (cursorLine == i);
 
     move(screenRow, 0);
-    attrset(COLOR_PAIR(0));
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
 
     // Render line numbers
     if (show_line_numbers)
     {
-      int ln_colorPair = isCurrentLine ? 3 : 2;
+      int ln_colorPair = isCurrentLine ? ColorPairs::LINE_NUMBERS_ACTIVE
+                                       : ColorPairs::LINE_NUMBERS;
       attron(COLOR_PAIR(ln_colorPair));
       printw("%*d ", lineNumWidth, i + 1);
       attroff(COLOR_PAIR(ln_colorPair));
 
-      attron(COLOR_PAIR(4));
+      attron(COLOR_PAIR(ColorPairs::UI_BORDER));
       addch(' ');
-      attroff(COLOR_PAIR(4));
+      attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
       addch(' ');
     }
 
@@ -418,96 +423,79 @@ void Editor::display()
       }
     }
 
-    // Render line content (unchanged logic, but faster due to cached spans)
     bool lineHasSelection =
         hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
-    int current_span_idx = 0;
-    int num_spans = currentLineSpans.size();
 
-    for (int screenCol = 0; screenCol < contentWidth; screenCol++)
+    // Build render spans that combine highlighting + selection
+    std::vector<RenderSpan> renderSpans =
+        buildRenderSpans(expandedLine, currentLineSpans, lineHasSelection,
+                         sel_start_line, sel_end_line, sel_start_col,
+                         sel_end_col, i, viewportLeft, contentWidth);
+
+    // Render each span as a batch
+    int screenCol = 0;
+    for (const auto &span : renderSpans)
     {
-      int fileCol = viewportLeft + screenCol;
-      bool charExists =
-          (fileCol >= 0 && fileCol < static_cast<int>(expandedLine.length()));
-      char ch = charExists ? expandedLine[fileCol] : ' ';
+      if (screenCol >= contentWidth)
+        break;
 
-      if (charExists && (ch < 32 || ch > 126))
-        ch = ' ';
-
-      // Selection check
-      bool isSelected = false;
-      if (lineHasSelection && charExists)
+      // Set attributes once per span (not per character!)
+      if (span.isSelected)
       {
-        if (sel_start_line == sel_end_line)
-        {
-          isSelected = (fileCol >= sel_start_col && fileCol < sel_end_col);
-        }
-        else if (i == sel_start_line)
-        {
-          isSelected = (fileCol >= sel_start_col);
-        }
-        else if (i == sel_end_line)
-        {
-          isSelected = (fileCol < sel_end_col);
-        }
-        else
-        {
-          isSelected = true;
-        }
+        attron(COLOR_PAIR(ColorPairs::STATE_SELECTED) | A_REVERSE);
       }
-
-      if (isSelected)
+      else if (span.colorPair >= 0)
       {
-        attron(COLOR_PAIR(14) | A_REVERSE);
-        addch(ch);
-        attroff(COLOR_PAIR(14) | A_REVERSE);
+        attron(COLOR_PAIR(span.colorPair));
+        if (span.attribute != 0)
+        {
+          attron(span.attribute);
+        }
       }
       else
       {
-        bool colorApplied = false;
+        attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+      }
 
-        if (charExists && num_spans > 0)
+      // Render all characters in this span
+      for (int col = span.start; col < span.end && screenCol < contentWidth;
+           ++col)
+      {
+        int fileCol = viewportLeft + screenCol;
+        char ch = ' ';
+
+        if (fileCol >= 0 && fileCol < (int)expandedLine.length())
         {
-          while (current_span_idx < num_spans &&
-                 currentLineSpans[current_span_idx].end <= fileCol)
-          {
-            current_span_idx++;
-          }
-
-          if (current_span_idx < num_spans)
-          {
-            const auto &span = currentLineSpans[current_span_idx];
-            if (fileCol >= span.start && fileCol < span.end)
-            {
-              if (span.colorPair >= 0 && span.colorPair < COLOR_PAIRS)
-              {
-                attron(COLOR_PAIR(span.colorPair));
-                if (span.attribute != 0)
-                  attron(span.attribute);
-                addch(ch);
-                if (span.attribute != 0)
-                  attroff(span.attribute);
-                attroff(COLOR_PAIR(span.colorPair));
-                colorApplied = true;
-              }
-            }
-          }
+          ch = expandedLine[fileCol];
+          if (ch < 32 || ch > 126)
+            ch = ' ';
         }
 
-        if (!colorApplied)
+        addch(ch);
+        screenCol++;
+      }
+
+      // Clear attributes once per span
+      if (span.isSelected)
+      {
+        attroff(COLOR_PAIR(ColorPairs::STATE_SELECTED) | A_REVERSE);
+      }
+      else if (span.colorPair >= 0)
+      {
+        if (span.attribute != 0)
         {
-          attrset(COLOR_PAIR(0));
-          addch(ch);
+          attroff(span.attribute);
         }
+        attroff(COLOR_PAIR(span.colorPair));
       }
     }
 
-    attrset(COLOR_PAIR(0));
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
     clrtoeol();
   }
 
   // Clear remaining lines
-  attrset(COLOR_PAIR(0));
+  attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
   for (int i = endLine - viewportTop; i < viewportHeight; i++)
   {
     move(i, 0);
@@ -518,6 +506,100 @@ void Editor::display()
   positionCursor();
 }
 
+std::vector<Editor::RenderSpan>
+Editor::buildRenderSpans(const std::string &line,
+                         const std::vector<ColorSpan> &highlightSpans,
+                         bool lineHasSelection, int sel_start_line,
+                         int sel_end_line, int sel_start_col, int sel_end_col,
+                         int currentLine, int viewportLeft, int contentWidth)
+{
+  std::vector<RenderSpan> spans;
+
+  // Track current position and state
+  int spanStart = 0;
+  int currentColorPair = -1;
+  int currentAttribute = 0;
+  bool currentlySelected = false;
+
+  // Helper to check selection at a file column
+  auto isColSelected = [&](int fileCol) -> bool
+  {
+    if (!lineHasSelection)
+      return false;
+
+    if (sel_start_line == sel_end_line)
+    {
+      return fileCol >= sel_start_col && fileCol < sel_end_col;
+    }
+    else if (currentLine == sel_start_line)
+    {
+      return fileCol >= sel_start_col;
+    }
+    else if (currentLine == sel_end_line)
+    {
+      return fileCol < sel_end_col;
+    }
+    else
+    {
+      return true; // Middle line, fully selected
+    }
+  };
+
+  // Helper to find highlight span for a file column
+  auto findHighlightSpan = [&](int fileCol) -> const ColorSpan *
+  {
+    for (const auto &span : highlightSpans)
+    {
+      if (fileCol >= span.start && fileCol < span.end)
+      {
+        return &span;
+      }
+    }
+    return nullptr;
+  };
+
+  // Scan through visible columns and build batched spans
+  for (int screenCol = 0; screenCol < contentWidth; ++screenCol)
+  {
+    int fileCol = viewportLeft + screenCol;
+
+    bool selected = isColSelected(fileCol);
+    const ColorSpan *highlight = (fileCol >= 0 && fileCol < (int)line.length())
+                                     ? findHighlightSpan(fileCol)
+                                     : nullptr;
+
+    int colorPair = highlight ? highlight->colorPair : -1;
+    int attribute = highlight ? highlight->attribute : 0;
+
+    // Check if we need to start a new span
+    bool stateChanged = (selected != currentlySelected) ||
+                        (colorPair != currentColorPair) ||
+                        (attribute != currentAttribute);
+
+    if (stateChanged && screenCol > spanStart)
+    {
+      // Finish current span
+      spans.push_back({spanStart, screenCol, currentColorPair, currentAttribute,
+                       currentlySelected});
+      spanStart = screenCol;
+    }
+
+    // Update current state
+    currentlySelected = selected;
+    currentColorPair = colorPair;
+    currentAttribute = attribute;
+  }
+
+  // Finish last span
+  if (spanStart < contentWidth)
+  {
+    spans.push_back({spanStart, contentWidth, currentColorPair,
+                     currentAttribute, currentlySelected});
+  }
+
+  return spans;
+}
+
 void Editor::drawStatusBar()
 {
   int rows, cols;
@@ -525,14 +607,13 @@ void Editor::drawStatusBar()
   int statusRow = rows - 1;
 
   move(statusRow, 0);
-  attrset(COLOR_PAIR(STATUS_BAR));
+  attrset(COLOR_PAIR(ColorPairs::STATUS_BAR));
   clrtoeol();
 
   move(statusRow, 0);
-  attron(COLOR_PAIR(STATUS_BAR));
 
-  // Show filename
-  attron(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
+  // Show filename using STATUS_BAR_ACTIVE for main UI elements
+  attron(COLOR_PAIR(ColorPairs::STATUS_BAR_ACTIVE) | A_BOLD);
   if (filename.empty())
   {
     printw("[No Name]");
@@ -545,23 +626,23 @@ void Editor::drawStatusBar()
                                   : filename;
     printw("%s", displayName.c_str());
   }
-  attroff(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
+  attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_ACTIVE) | A_BOLD);
 
-  // Show modified indicator
+  // Show modified indicator - use text color with bold
   if (isModified)
   {
-    attron(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT) | A_BOLD);
     printw(" [+]");
-    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT) | A_BOLD);
   }
 
   // Show file extension
   std::string ext = getFileExtension();
   if (!ext.empty())
   {
-    attron(COLOR_PAIR(STATUS_BAR_ACTIVE));
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
     printw(" [%s]", ext.c_str());
-    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE));
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
   }
 
   // Right section with position info
@@ -612,24 +693,21 @@ void Editor::drawStatusBar()
     rightStart = currentPos + 2;
   }
 
-  // Fill middle space
-  attron(COLOR_PAIR(STATUS_BAR));
+  // Fill middle space with status bar background
   for (int i = currentPos; i < rightStart && i < cols; i++)
   {
     move(statusRow, i);
-    addch(' ');
+    addch(' ' | COLOR_PAIR(ColorPairs::STATUS_BAR));
   }
 
-  // Right section
+  // Right section using STATUS_BAR_TEXT for position information
   if (rightStart < cols)
   {
     move(statusRow, rightStart);
-    attron(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
     printw("%s", rightSection);
-    attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
   }
-
-  attroff(COLOR_PAIR(STATUS_BAR));
 }
 
 void Editor::handleResize()
@@ -1646,52 +1724,77 @@ void Editor::deleteLine()
 void Editor::deleteSelection()
 {
   if (!hasSelection && !isSelecting)
+  {
     return;
+  }
+
+  auto selection = getNormalizedSelection();
+  int startLine = selection.first.first;
+  int startCol = selection.first.second;
+  int endLine = selection.second.first;
+  int endCol = selection.second.second;
+
+  // Validate bounds
+  if (startLine < 0 || startLine >= buffer.getLineCount() || endLine < 0 ||
+      endLine >= buffer.getLineCount())
+  {
+    std::cerr << "Warning: Cannot delete - selection out of bounds\n";
+    clearSelection();
+    return;
+  }
 
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForDeleteSelection();
 
-    auto selection = getNormalizedSelection();
-    int startLine = selection.first.first;
-    int startCol = selection.first.second;
-    int endLine = selection.second.first;
-    int endCol = selection.second.second;
-
     size_t start_byte = buffer.lineColToPos(startLine, startCol);
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
-    size_t delete_bytes = end_byte - start_byte;
+    size_t delete_bytes = (end_byte > start_byte) ? (end_byte - start_byte) : 0;
 
-    // 1. MODIFY BUFFER FIRST
+    // Perform the deletion
     if (startLine == endLine)
     {
+      // Single line deletion
       std::string line = buffer.getLine(startLine);
-      line.erase(startCol, endCol - startCol);
-      buffer.replaceLine(startLine, line);
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(line.length())));
+      endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+      if (endCol > startCol)
+      {
+        line.erase(startCol, endCol - startCol);
+        buffer.replaceLine(startLine, line);
+      }
     }
     else
     {
+      // Multi-line deletion
       std::string firstLine = buffer.getLine(startLine);
       std::string lastLine = buffer.getLine(endLine);
+
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(firstLine.length())));
+      endCol =
+          std::max(0, std::min(endCol, static_cast<int>(lastLine.length())));
 
       std::string newLine =
           firstLine.substr(0, startCol) + lastLine.substr(endCol);
       buffer.replaceLine(startLine, newLine);
 
+      // Delete intermediate lines
       for (int i = endLine; i > startLine; i--)
       {
         buffer.deleteLine(i);
       }
     }
 
-    // 2. THEN notify Tree-sitter AFTER buffer change
+    // Update syntax highlighter
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(
-          buffer, start_byte, delete_bytes, 0, // Deleted bytes
-          startLine, startCol, endLine, endCol, startLine, startCol);
-
+      syntaxHighlighter->updateTreeAfterEdit(buffer, start_byte, delete_bytes,
+                                             0, startLine, startCol, endLine,
+                                             endCol, startLine, startCol);
       syntaxHighlighter->invalidateLineRange(startLine,
                                              buffer.getLineCount() - 1);
     }
@@ -1699,7 +1802,6 @@ void Editor::deleteSelection()
     updateCursorAndViewport(startLine, startCol);
     clearSelection();
 
-    // Complete delta
     delta.postCursorLine = cursorLine;
     delta.postCursorCol = cursorCol;
     delta.postViewportTop = viewportTop;
@@ -1722,29 +1824,35 @@ void Editor::deleteSelection()
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
+    // Fallback: full-state undo
     saveState();
-
-    auto selection = getNormalizedSelection();
-    int startLine = selection.first.first;
-    int startCol = selection.first.second;
-    int endLine = selection.second.first;
-    int endCol = selection.second.second;
 
     size_t start_byte = buffer.lineColToPos(startLine, startCol);
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
-    size_t delete_bytes = end_byte - start_byte;
+    size_t delete_bytes = (end_byte > start_byte) ? (end_byte - start_byte) : 0;
 
     if (startLine == endLine)
     {
       std::string line = buffer.getLine(startLine);
-      line.erase(startCol, endCol - startCol);
-      buffer.replaceLine(startLine, line);
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(line.length())));
+      endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+      if (endCol > startCol)
+      {
+        line.erase(startCol, endCol - startCol);
+        buffer.replaceLine(startLine, line);
+      }
     }
     else
     {
       std::string firstLine = buffer.getLine(startLine);
       std::string lastLine = buffer.getLine(endLine);
+
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(firstLine.length())));
+      endCol =
+          std::max(0, std::min(endCol, static_cast<int>(lastLine.length())));
 
       std::string newLine =
           firstLine.substr(0, startCol) + lastLine.substr(endCol);
@@ -2091,14 +2199,27 @@ Editor::getNormalizedSelection()
 
   return {{startLine, startCol}, {endLine, endCol}};
 }
+
 std::string Editor::getSelectedText()
 {
   if (!hasSelection && !isSelecting)
+  {
     return "";
+  }
 
   auto [start, end] = getNormalizedSelection();
-  int startLine = start.first, startCol = start.second;
-  int endLine = end.first, endCol = end.second;
+  int startLine = start.first;
+  int startCol = start.second;
+  int endLine = end.first;
+  int endCol = end.second;
+
+  // Validate bounds
+  if (startLine < 0 || startLine >= buffer.getLineCount() || endLine < 0 ||
+      endLine >= buffer.getLineCount())
+  {
+    std::cerr << "Warning: Selection out of bounds\n";
+    return "";
+  }
 
   std::ostringstream result;
 
@@ -2106,7 +2227,15 @@ std::string Editor::getSelectedText()
   {
     // Single line selection
     std::string line = buffer.getLine(startLine);
-    result << line.substr(startCol, endCol - startCol);
+
+    // Clamp columns to line length
+    startCol = std::max(0, std::min(startCol, static_cast<int>(line.length())));
+    endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+    if (endCol > startCol)
+    {
+      result << line.substr(startCol, endCol - startCol);
+    }
   }
   else
   {
@@ -2117,17 +2246,24 @@ std::string Editor::getSelectedText()
 
       if (i == startLine)
       {
+        // First line: from startCol to end
+        startCol =
+            std::max(0, std::min(startCol, static_cast<int>(line.length())));
         result << line.substr(startCol);
       }
       else if (i == endLine)
       {
+        // Last line: from start to endCol
+        endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
         result << line.substr(0, endCol);
       }
       else
       {
+        // Middle lines: entire line
         result << line;
       }
 
+      // Add newline between lines (but not after last line)
       if (i < endLine)
       {
         result << "\n";
@@ -2135,7 +2271,6 @@ std::string Editor::getSelectedText()
     }
   }
 
-  // CRITICAL FIX: Actually return the result!
   return result.str();
 }
 
@@ -2166,21 +2301,33 @@ void Editor::updateSelectionEnd()
 void Editor::copySelection()
 {
   if (!hasSelection && !isSelecting)
-    return;
-
-  clipboard = getSelectedText();
-
-  // On Unix, also copy to system clipboard using xclip or xsel
-#ifndef _WIN32
-  FILE *pipe = popen("xclip -selection clipboard 2>/dev/null || xsel "
-                     "--clipboard --input 2>/dev/null",
-                     "w");
-  if (pipe)
   {
-    fwrite(clipboard.c_str(), 1, clipboard.length(), pipe);
-    pclose(pipe);
+    return;
   }
-#endif
+
+  // Get the selected text
+  std::string selectedText = getSelectedText();
+
+  if (selectedText.empty())
+  {
+    std::cerr << "Warning: No text selected for copy\n";
+    return;
+  }
+
+  // Store in internal clipboard (fallback)
+  clipboard = selectedText;
+
+  // Try to copy to system clipboard
+  if (Clipboard::copyToSystemClipboard(selectedText))
+  {
+    // Success - optionally show a status message
+    // std::cerr << "Copied " << selectedText.length() << " characters\n";
+  }
+  else
+  {
+    std::cerr << "Warning: Could not access system clipboard, using internal "
+                 "clipboard\n";
+  }
 }
 
 void Editor::cutSelection()
@@ -2195,32 +2342,24 @@ void Editor::cutSelection()
 void Editor::pasteFromClipboard()
 {
   // Try to get from system clipboard first
-#ifndef _WIN32
-  FILE *pipe = popen("xclip -selection clipboard -o 2>/dev/null || xsel "
-                     "--clipboard --output 2>/dev/null",
-                     "r");
-  if (pipe)
-  {
-    char buffer_chars[4096];
-    std::string result;
-    while (fgets(buffer_chars, sizeof(buffer_chars), pipe))
-    {
-      result += buffer_chars;
-    }
-    pclose(pipe);
+  std::string systemClipboard = Clipboard::getFromSystemClipboard();
 
-    if (!result.empty())
-    {
-      clipboard = result;
-    }
+  if (!systemClipboard.empty())
+  {
+    clipboard = systemClipboard;
   }
-#endif
 
   if (clipboard.empty())
+  {
     return;
+  }
 
-  // SAVE STATE BEFORE PASTE (single undo point for entire paste)
-  if (!isUndoRedoing)
+  // Create a delta group for the entire paste operation
+  if (useDeltaUndo_ && !isUndoRedoing)
+  {
+    beginDeltaGroup();
+  }
+  else if (!isUndoRedoing)
   {
     saveState();
   }
@@ -2231,20 +2370,46 @@ void Editor::pasteFromClipboard()
     deleteSelection();
   }
 
-  // Insert clipboard content character by character
-  // Note: Each insertChar/insertNewline will NOT call saveState
-  // because we already saved it above
-  for (char ch : clipboard)
+  // Insert clipboard content
+  size_t start_byte = buffer.lineColToPos(cursorLine, cursorCol);
+  int start_line = cursorLine;
+  int start_col = cursorCol;
+
+  // Split clipboard by lines and insert
+  std::istringstream iss(clipboard);
+  std::string line;
+  bool firstLine = true;
+
+  while (std::getline(iss, line))
   {
-    if (ch == '\n')
+    if (!firstLine)
     {
       insertNewline();
     }
-    else
+
+    // Insert each character of the line
+    for (char ch : line)
     {
       insertChar(ch);
     }
+
+    firstLine = false;
   }
+
+  // If clipboard ended with newline, add it
+  if (!clipboard.empty() && clipboard.back() == '\n')
+  {
+    insertNewline();
+  }
+
+  // Commit the paste as a single undo operation
+  if (useDeltaUndo_ && !isUndoRedoing)
+  {
+    commitDeltaGroup();
+    beginDeltaGroup();
+  }
+
+  markModified();
 }
 
 void Editor::selectAll()

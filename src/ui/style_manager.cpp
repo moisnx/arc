@@ -13,12 +13,12 @@ inline int setenv(const char *name, const char *value, int overwrite)
     size_t envsize = 0;
     getenv_s(&envsize, nullptr, 0, name);
     if (envsize != 0)
-      return 0; // Variable exists, don't overwrite
+      return 0;
   }
   return _putenv_s(name, value);
 }
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
 #include <sstream>
 
@@ -32,11 +32,9 @@ void StyleManager::initialize()
 {
   if (initialized)
   {
-    std::cerr << "StyleManager already initialized" << std::endl;
     return;
   }
 
-  // Critical: Check if ncurses has been initialized first
   if (!stdscr)
   {
     std::cerr << "ERROR: ncurses not initialized. Call initscr() first!"
@@ -50,81 +48,49 @@ void StyleManager::initialize()
     return;
   }
 
-  // Initialize color support
   if (start_color() == ERR)
   {
     std::cerr << "Failed to start color support" << std::endl;
     return;
   }
 
-  // Use default terminal colors - CRITICAL for transparent support
   if (use_default_colors() == ERR)
   {
     std::cerr << "Warning: use_default_colors() failed, using fallback"
               << std::endl;
-    // Fallback: assume black background, white foreground
     assume_default_colors(COLOR_WHITE, COLOR_BLACK);
   }
 
-  // Initialize color capability cache and custom color tracking
   supports_256_colors_cache = supports_256_colors();
-  next_custom_color_id = 16; // Start custom colors at ID 16
+  next_custom_color_id = 16;
   color_cache.clear();
-
-  // std::cerr << "=== UNIFIED THEME SYSTEM WITH HEX SUPPORT ===" << std::endl;
-  // std::cerr << "COLORS: " << COLORS << std::endl;
-  // std::cerr << "COLOR_PAIRS: " << COLOR_PAIRS << std::endl;
-  // std::cerr << "256-color support: "
-  //           << (supports_256_colors_cache ? "YES" : "NO") << std::endl;
-  // std::cerr << "TERM: " << (getenv("TERM") ? getenv("TERM") : "not set")
-  //           << std::endl;
-
-  // Check for WSL-specific issues
-  const char *wsl_distro = getenv("WSL_DISTRO_NAME");
-  if (wsl_distro)
-  {
-    // std::cerr << "WSL detected: " << wsl_distro << std::endl;
-    // WSL sometimes has color issues, force TERM if needed
-    if (!getenv("TERM") || strcmp(getenv("TERM"), "dumb") == 0)
-    {
-      // std::cerr << "Setting TERM=xterm-256color for WSL" << std::endl;
-      setenv("TERM", "xterm-256color", 1);
-    }
-  }
 
   load_default_theme();
   apply_theme();
 
   initialized = true;
-  // std::cerr << "Unified theme system initialized successfully" << std::endl;
 }
 
 short StyleManager::resolve_theme_color(const std::string &config_value)
 {
-  // Handle transparent/default colors
   if (config_value.empty() || config_value == "transparent" ||
       config_value == "default")
   {
-    return -1; // Use terminal default
+    return -1;
   }
 
-  // Check if it's a hex color
   if (config_value.length() == 7 && config_value[0] == '#')
   {
-    // Check cache first
     auto cache_it = color_cache.find(config_value);
     if (cache_it != color_cache.end())
     {
       return cache_it->second;
     }
 
-    // Parse the hex color
     RGB rgb = parse_hex_color(config_value);
 
     if (supports_256_colors_cache && next_custom_color_id < COLORS)
     {
-      // 256-color mode: use init_color for true color mapping
-      // Scale R, G, B from 0-255 to ncurses' 0-1000 range
       short r_1000 = (rgb.r * 1000) / 255;
       short g_1000 = (rgb.g * 1000) / 255;
       short b_1000 = (rgb.b * 1000) / 255;
@@ -132,20 +98,8 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
       short color_id = next_custom_color_id;
       if (init_color(color_id, r_1000, g_1000, b_1000) == OK)
       {
-        // Cache the mapping and increment for next time
-        auto cache_it = color_cache.find(config_value);
-        if (cache_it != color_cache.end())
-        {
-          return cache_it->second; // OK: using iterator
-        }
-
         color_cache[config_value] = color_id;
-        const_cast<StyleManager *>(this)->next_custom_color_id++;
-
-        // std::cerr << "Created custom color " << color_id << " for "
-        //           << config_value << " (RGB: " << rgb.r << "," << rgb.g <<
-        //           ","
-        //           << rgb.b << ")" << std::endl;
+        next_custom_color_id++;
         return color_id;
       }
       else
@@ -155,17 +109,13 @@ short StyleManager::resolve_theme_color(const std::string &config_value)
       }
     }
 
-    // Fallback to legacy 8-color mode
     return find_closest_8color(rgb);
   }
 
-  // Legacy named color support (for backward compatibility)
-  // This handles old theme files that might still use color names
-  ThemeColor legacy_color = string_to_theme_color(config_value);
-  return theme_color_to_ncurses_color(legacy_color);
+  // Fallback for any legacy color names
+  return COLOR_WHITE;
 }
 
-// NEW: Hex color parsing utility
 RGB StyleManager::parse_hex_color(const std::string &hex_str) const
 {
   RGB rgb;
@@ -179,7 +129,6 @@ RGB StyleManager::parse_hex_color(const std::string &hex_str) const
 
   try
   {
-    // Parse each component (skip the '#')
     std::string r_str = hex_str.substr(1, 2);
     std::string g_str = hex_str.substr(3, 2);
     std::string b_str = hex_str.substr(5, 2);
@@ -188,7 +137,6 @@ RGB StyleManager::parse_hex_color(const std::string &hex_str) const
     rgb.g = std::stoi(g_str, nullptr, 16);
     rgb.b = std::stoi(b_str, nullptr, 16);
 
-    // Clamp to valid range
     rgb.r = std::max(0, std::min(255, rgb.r));
     rgb.g = std::max(0, std::min(255, rgb.g));
     rgb.b = std::max(0, std::min(255, rgb.b));
@@ -203,28 +151,20 @@ RGB StyleManager::parse_hex_color(const std::string &hex_str) const
   return rgb;
 }
 
-// NEW: Find closest 8-color match for fallback
 short StyleManager::find_closest_8color(const RGB &rgb) const
 {
-  // Define the standard 8 colors in RGB
   struct ColorMapping
   {
     short ncurses_color;
     RGB rgb;
-    const char *name;
   };
 
   static const ColorMapping basic_colors[] = {
-      {COLOR_BLACK, RGB(0, 0, 0), "black"},
-      {COLOR_RED, RGB(128, 0, 0), "red"},
-      {COLOR_GREEN, RGB(0, 128, 0), "green"},
-      {COLOR_YELLOW, RGB(128, 128, 0), "yellow"},
-      {COLOR_BLUE, RGB(0, 0, 128), "blue"},
-      {COLOR_MAGENTA, RGB(128, 0, 128), "magenta"},
-      {COLOR_CYAN, RGB(0, 128, 128), "cyan"},
-      {COLOR_WHITE, RGB(192, 192, 192), "white"}};
+      {COLOR_BLACK, RGB(0, 0, 0)},    {COLOR_RED, RGB(128, 0, 0)},
+      {COLOR_GREEN, RGB(0, 128, 0)},  {COLOR_YELLOW, RGB(128, 128, 0)},
+      {COLOR_BLUE, RGB(0, 0, 128)},   {COLOR_MAGENTA, RGB(128, 0, 128)},
+      {COLOR_CYAN, RGB(0, 128, 128)}, {COLOR_WHITE, RGB(192, 192, 192)}};
 
-  // Find the closest color using simple Euclidean distance
   double min_distance = 1000000;
   short closest_color = COLOR_WHITE;
 
@@ -245,179 +185,81 @@ short StyleManager::find_closest_8color(const RGB &rgb) const
   return closest_color;
 }
 
-// Legacy function - kept only for load_default_theme compatibility
-ThemeColor
-StyleManager::string_to_theme_color(const std::string &color_name) const
-{
-  std::string lower_name = color_name;
-  std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
-                 ::tolower);
-
-  if (lower_name == "black")
-    return ThemeColor::BLACK;
-  if (lower_name == "dark_gray" || lower_name == "dark_grey")
-    return ThemeColor::DARK_GRAY;
-  if (lower_name == "gray" || lower_name == "grey")
-    return ThemeColor::GRAY;
-  if (lower_name == "light_gray" || lower_name == "light_grey")
-    return ThemeColor::LIGHT_GRAY;
-  if (lower_name == "white")
-    return ThemeColor::WHITE;
-  if (lower_name == "red")
-    return ThemeColor::RED;
-  if (lower_name == "green")
-    return ThemeColor::GREEN;
-  if (lower_name == "blue")
-    return ThemeColor::BLUE;
-  if (lower_name == "yellow")
-    return ThemeColor::YELLOW;
-  if (lower_name == "magenta")
-    return ThemeColor::MAGENTA;
-  if (lower_name == "cyan")
-    return ThemeColor::CYAN;
-  if (lower_name == "bright_red")
-    return ThemeColor::BRIGHT_RED;
-  if (lower_name == "bright_green")
-    return ThemeColor::BRIGHT_GREEN;
-  if (lower_name == "bright_blue")
-    return ThemeColor::BRIGHT_BLUE;
-  if (lower_name == "bright_yellow")
-    return ThemeColor::BRIGHT_YELLOW;
-  if (lower_name == "bright_magenta")
-    return ThemeColor::BRIGHT_MAGENTA;
-  if (lower_name == "bright_cyan")
-    return ThemeColor::BRIGHT_CYAN;
-
-  std::cerr << "Unknown color name: " << color_name << ", using white"
-            << std::endl;
-  return ThemeColor::WHITE;
-}
-
-// Legacy function - kept for backward compatibility
-int StyleManager::theme_color_to_ncurses_color(ThemeColor color) const
-{
-  switch (color)
-  {
-  case ThemeColor::BLACK:
-    return COLOR_BLACK;
-  case ThemeColor::DARK_GRAY:
-    return COLOR_BLACK; // Will use A_BOLD attribute for brighter black
-  case ThemeColor::GRAY:
-    return COLOR_WHITE; // Will use A_DIM attribute for dimmed white
-  case ThemeColor::LIGHT_GRAY:
-    return COLOR_WHITE; // Will use A_DIM + A_BOLD for medium brightness
-  case ThemeColor::WHITE:
-    return COLOR_WHITE;
-  case ThemeColor::RED:
-    return COLOR_RED;
-  case ThemeColor::GREEN:
-    return COLOR_GREEN;
-  case ThemeColor::BLUE:
-    return COLOR_BLUE;
-  case ThemeColor::YELLOW:
-    return COLOR_YELLOW;
-  case ThemeColor::MAGENTA:
-    return COLOR_MAGENTA;
-  case ThemeColor::CYAN:
-    return COLOR_CYAN;
-  case ThemeColor::BRIGHT_RED:
-    return COLOR_RED; // Will use A_BOLD attribute
-  case ThemeColor::BRIGHT_GREEN:
-    return COLOR_GREEN; // Will use A_BOLD attribute
-  case ThemeColor::BRIGHT_BLUE:
-    return COLOR_BLUE; // Will use A_BOLD attribute
-  case ThemeColor::BRIGHT_YELLOW:
-    return COLOR_YELLOW; // Will use A_BOLD attribute
-  case ThemeColor::BRIGHT_MAGENTA:
-    return COLOR_MAGENTA; // Will use A_BOLD attribute
-  case ThemeColor::BRIGHT_CYAN:
-    return COLOR_CYAN; // Will use A_BOLD attribute
-  case ThemeColor::TERMINAL:
-    return COLOR_RED;
-  default:
-    return COLOR_WHITE;
-  }
-}
-
-// Legacy function - simplified since 256-color provides enough fidelity
-int StyleManager::theme_color_to_ncurses_attr(ThemeColor color) const
-{
-  // With 256-color support, we can rely more on actual colors than attributes
-  // Keep only essential attributes
-  switch (color)
-  {
-  case ThemeColor::BRIGHT_RED:
-  case ThemeColor::BRIGHT_GREEN:
-  case ThemeColor::BRIGHT_BLUE:
-  case ThemeColor::BRIGHT_YELLOW:
-  case ThemeColor::BRIGHT_MAGENTA:
-  case ThemeColor::BRIGHT_CYAN:
-    return A_BOLD; // Keep bold for legacy compatibility
-  default:
-    return A_NORMAL;
-  }
-}
-
 bool StyleManager::is_light_theme() const
 {
-  // Check if background is a light hex color or legacy light theme
   if (current_theme.background[0] == '#')
   {
     RGB bg_rgb = parse_hex_color(current_theme.background);
-    // Consider it light if the average RGB value is > 128
     return (bg_rgb.r + bg_rgb.g + bg_rgb.b) / 3 > 128;
   }
-
-  // Legacy check for named colors
-  ThemeColor legacy_bg = string_to_theme_color(current_theme.background);
-  return (legacy_bg == ThemeColor::WHITE ||
-          legacy_bg == ThemeColor::LIGHT_GRAY);
+  return false;
 }
 
 void StyleManager::load_default_theme()
 {
   current_theme = {
-      "Default Dark (Hex)",
-      "#000000", // background
-      "#FFFFFF", // foreground
-      "#FFFFFF", // cursor
-      "#0000FF", // selection
-      "#333333", // line_highlight
-      "#FFFF00", // line_numbers
-      "#FFFF99", // line_numbers_active
-      "#000080", // status_bar_bg
-      "#FFFFFF", // status_bar_fg
-      "#00FFFF", // status_bar_active
+      "Default Dark (Semantic)",
 
-      // Semantic categories
-      "#569CD6", // keyword
-      "#CE9178", // string_literal
-      "#B5CEA8", // number
-      "#6A9955", // comment
-      "#DCDCAA", // function_name
-      "#9CDCFE", // variable
-      "#4EC9B0", // type
-      "#D4D4D4", // operator
-      "#D4D4D4", // punctuation
-      "#4FC1FF", // constant
-      "#4EC9B0", // namespace
-      "#9CDCFE", // property
-      "#DCDCAA", // decorator
-      "#C586C0", // macro
-      "#569CD6", // label
+      // Core
+      "transparent", // background
+      "#C9D1D9",     // foreground
+
+      // State colors
+      "#58A6FF", // state_active
+      "#264F78", // state_selected
+      "#161B22", // state_hover
+      "#6E7681", // state_disabled
+
+      // Semantic UI
+      "#58A6FF", // ui_primary
+      "#8B949E", // ui_secondary
+      "#D2A8FF", // ui_accent
+      "#7EE787", // ui_success
+      "#E3B341", // ui_warning
+      "#FF7B72", // ui_error
+      "#79C0FF", // ui_info
+      "#30363D", // ui_border
+
+      // Editor-specific
+      "#FFFFFF", // cursor
+      "#6E7681", // line_numbers
+      "#C9D1D9", // line_numbers_active
+      "#161B22", // line_highlight
+
+      // Status bar
+      "#21262D", // status_bar_bg
+      "#C9D1D9", // status_bar_fg
+      "#58A6FF", // status_bar_active
+
+      // Syntax
+      "#FF7B72", // keyword
+      "#7EE787", // string_literal
+      "#D2A8FF", // number
+      "#8B949E", // comment
+      "#D2A8FF", // function_name
+      "#C9D1D9", // variable
+      "#79C0FF", // type
+      "#FF7B72", // operator
+      "#C9D1D9", // punctuation
+      "#79C0FF", // constant
+      "#79C0FF", // namespace
+      "#C9D1D9", // property
+      "#D2A8FF", // decorator
+      "#FF7B72", // macro
+      "#FF7B72", // label
 
       // Markup
-      "#569CD6", // markup_heading
-      "#D4D4D4", // markup_bold
-      "#CE9178", // markup_italic
-      "#CE9178", // markup_code
-      "#CE9178", // markup_code_block
-      "#3794FF", // markup_link
-      "#3794FF", // markup_url
-      "#6A9955", // markup_list
-      "#6A9955", // markup_blockquote
+      "#FF7B72", // markup_heading
+      "#C9D1D9", // markup_bold
+      "#7EE787", // markup_italic
+      "#D2A8FF", // markup_code
+      "#D2A8FF", // markup_code_block
+      "#58A6FF", // markup_link
+      "#58A6FF", // markup_url
+      "#7EE787", // markup_list
+      "#8B949E", // markup_blockquote
       "#FF6B6B", // markup_strikethrough
-      "#6A9955"  // markup_quote
+      "#8B949E"  // markup_quote
   };
 }
 
@@ -425,20 +267,13 @@ void StyleManager::apply_theme()
 {
   if (!initialized)
   {
-    // std::cerr << "StyleManager not initialized, cannot apply theme"
-    //           << std::endl;
     return;
   }
-
-  // std::cerr << "Applying theme: " << current_theme.name << std::endl;
 
   short terminal_bg = resolve_theme_color(current_theme.background);
   short terminal_fg = resolve_theme_color(current_theme.foreground);
 
-  init_pair(0, terminal_fg, terminal_bg);
-  const int BACKGROUND_PAIR_ID = 100;
-  init_pair(BACKGROUND_PAIR_ID, terminal_fg, terminal_bg);
-
+  // Helper lambda for initializing color pairs
   auto init_pair_enhanced = [&](int pair_id, const std::string &fg_color_str,
                                 const std::string &bg_color_str) -> bool
   {
@@ -450,125 +285,126 @@ void StyleManager::apply_theme()
     return (result == OK);
   };
 
-  // UI Elements
-  init_pair_enhanced(2, current_theme.line_numbers, current_theme.background);
-  init_pair_enhanced(3, current_theme.line_numbers_active,
+  // Core pairs (0-9)
+  init_pair(0, terminal_fg, terminal_bg);
+  init_pair_enhanced(1, current_theme.foreground, current_theme.background);
+
+  init_pair_enhanced(2, current_theme.foreground, current_theme.background);
+  // State colors (10-19) - THE NEW SEMANTIC PAIRS
+  init_pair_enhanced(ColorPairs::STATE_ACTIVE, current_theme.state_active,
                      current_theme.background);
-  init_pair_enhanced(4, "#808080", current_theme.background);
+  init_pair_enhanced(ColorPairs::STATE_SELECTED, current_theme.state_selected,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::STATE_HOVER, current_theme.foreground,
+                     current_theme.state_hover);
+  init_pair_enhanced(ColorPairs::STATE_DISABLED, current_theme.state_disabled,
+                     current_theme.background);
 
-  // Status bar
-  init_pair_enhanced(5, current_theme.status_bar_fg,
-                     current_theme.status_bar_bg);
-  init_pair_enhanced(6, current_theme.status_bar_fg,
-                     current_theme.status_bar_bg);
-  init_pair_enhanced(7, current_theme.status_bar_active,
-                     current_theme.status_bar_bg);
-  init_pair_enhanced(8, "#00FFFF", current_theme.status_bar_bg);
-  init_pair_enhanced(9, "#FFFF00", current_theme.status_bar_bg);
-  init_pair_enhanced(10, "#00FF00", current_theme.status_bar_bg);
-  init_pair_enhanced(11, "#FF00FF", current_theme.status_bar_bg);
-  init_pair_enhanced(12, "#808080", current_theme.status_bar_bg);
+  // Semantic UI (20-29) - THE NEW UI PAIRS
+  init_pair_enhanced(ColorPairs::UI_PRIMARY, current_theme.ui_primary,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_SECONDARY, current_theme.ui_secondary,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_ACCENT, current_theme.ui_accent,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_SUCCESS, current_theme.ui_success,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_WARNING, current_theme.ui_warning,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_ERROR, current_theme.ui_error,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_INFO, current_theme.ui_info,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::UI_BORDER, current_theme.ui_border,
+                     current_theme.background);
 
-  // Selection and cursor
-  init_pair_enhanced(13, current_theme.cursor, current_theme.background);
-  init_pair_enhanced(14, current_theme.foreground, current_theme.selection);
-  init_pair_enhanced(15, current_theme.foreground,
+  // Editor-specific (30-39)
+  init_pair_enhanced(ColorPairs::CURSOR, current_theme.cursor,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::LINE_NUMBERS, current_theme.line_numbers,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::LINE_NUMBERS_ACTIVE,
+                     current_theme.line_numbers_active,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::LINE_HIGHLIGHT, current_theme.foreground,
                      current_theme.line_highlight);
 
-  // Semantic categories (20-39)
-  init_pair_enhanced(20, current_theme.keyword, current_theme.background);
-  init_pair_enhanced(21, current_theme.string_literal,
-                     current_theme.background);
-  init_pair_enhanced(22, current_theme.number, current_theme.background);
-  init_pair_enhanced(23, current_theme.comment, current_theme.background);
-  init_pair_enhanced(24, current_theme.function_name, current_theme.background);
-  init_pair_enhanced(25, current_theme.variable, current_theme.background);
-  init_pair_enhanced(26, current_theme.type, current_theme.background);
-  init_pair_enhanced(27, current_theme.operator_color,
-                     current_theme.background);
-  init_pair_enhanced(28, current_theme.punctuation, current_theme.background);
-  init_pair_enhanced(29, current_theme.constant, current_theme.background);
-  init_pair_enhanced(30, current_theme.namespace_color,
-                     current_theme.background);
-  init_pair_enhanced(31, current_theme.property, current_theme.background);
-  init_pair_enhanced(32, current_theme.decorator, current_theme.background);
-  init_pair_enhanced(33, current_theme.macro, current_theme.background);
-  init_pair_enhanced(34, current_theme.label, current_theme.background);
+  // Status bar (40-49)
+  init_pair_enhanced(ColorPairs::STATUS_BAR, current_theme.status_bar_fg,
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_TEXT, current_theme.status_bar_fg,
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_ACTIVE,
+                     current_theme.status_bar_active,
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_CYAN, "#00FFFF",
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_YELLOW, "#FFFF00",
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_GREEN, "#00FF00",
+                     current_theme.status_bar_bg);
+  init_pair_enhanced(ColorPairs::STATUS_BAR_MAGENTA, "#FF00FF",
+                     current_theme.status_bar_bg);
 
-  // Markup (50-61)
-  init_pair_enhanced(50, current_theme.markup_heading,
+  // Syntax highlighting (50-69)
+  init_pair_enhanced(ColorPairs::SYNTAX_KEYWORD, current_theme.keyword,
                      current_theme.background);
-  init_pair_enhanced(51, current_theme.markup_bold, current_theme.background);
-  init_pair_enhanced(52, current_theme.markup_italic, current_theme.background);
-  init_pair_enhanced(53, current_theme.markup_code, current_theme.background);
-  init_pair_enhanced(54, current_theme.markup_code_block,
+  init_pair_enhanced(ColorPairs::SYNTAX_STRING, current_theme.string_literal,
                      current_theme.background);
-  init_pair_enhanced(55, current_theme.markup_link, current_theme.background);
-  init_pair_enhanced(56, current_theme.markup_url, current_theme.background);
-  init_pair_enhanced(57, current_theme.markup_blockquote,
+  init_pair_enhanced(ColorPairs::SYNTAX_NUMBER, current_theme.number,
                      current_theme.background);
-  init_pair_enhanced(58, current_theme.markup_list, current_theme.background);
-  init_pair_enhanced(59, current_theme.operator_color,
+  init_pair_enhanced(ColorPairs::SYNTAX_COMMENT, current_theme.comment,
                      current_theme.background);
-  init_pair_enhanced(60, current_theme.markup_strikethrough,
+  init_pair_enhanced(ColorPairs::SYNTAX_FUNCTION, current_theme.function_name,
                      current_theme.background);
-  init_pair_enhanced(61, current_theme.markup_quote, current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_VARIABLE, current_theme.variable,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_TYPE, current_theme.type,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_OPERATOR, current_theme.operator_color,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_PUNCTUATION, current_theme.punctuation,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_CONSTANT, current_theme.constant,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_NAMESPACE,
+                     current_theme.namespace_color, current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_PROPERTY, current_theme.property,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_DECORATOR, current_theme.decorator,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_MACRO, current_theme.macro,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::SYNTAX_LABEL, current_theme.label,
+                     current_theme.background);
 
-  // Special pairs
-  init_pair_enhanced(70, current_theme.foreground,
-                     current_theme.line_highlight);
+  // Markup (70-79)
+  init_pair_enhanced(ColorPairs::MARKUP_HEADING, current_theme.markup_heading,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_BOLD, current_theme.markup_bold,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_ITALIC, current_theme.markup_italic,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_CODE, current_theme.markup_code,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_CODE_BLOCK,
+                     current_theme.markup_code_block, current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_LINK, current_theme.markup_link,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_URL, current_theme.markup_url,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_BLOCKQUOTE,
+                     current_theme.markup_blockquote, current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_LIST, current_theme.markup_list,
+                     current_theme.background);
+  init_pair_enhanced(ColorPairs::MARKUP_STRIKETHROUGH,
+                     current_theme.markup_strikethrough,
+                     current_theme.background);
 
-  bkgdset(' ' | COLOR_PAIR(BACKGROUND_PAIR_ID));
+  bkgdset(' ' | COLOR_PAIR(1));
   clear();
-  // refresh();
 }
 
-// Also add this helper function to detect and optimize for WSL
-bool StyleManager::is_wsl_environment() const
-{
-  return getenv("WSL_DISTRO_NAME") != nullptr;
-}
-
-// Enhanced color initialization for WSL
-void StyleManager::optimize_for_wsl()
-{
-  if (!is_wsl_environment())
-    return;
-
-  std::cerr << "WSL environment detected - applying optimizations" << std::endl;
-
-  // Check Windows Terminal version and capabilities
-  const char *wt_session = getenv("WT_SESSION");
-  if (wt_session)
-  {
-    std::cerr << "Windows Terminal detected" << std::endl;
-
-    // Windows Terminal supports true color
-    if (supports_true_color())
-    {
-      std::cerr << "True color support detected" << std::endl;
-    }
-
-    // Force TERM to get better colors
-    if (!getenv("TERM") || strcmp(getenv("TERM"), "xterm-256color") != 0)
-    {
-      std::cerr << "Setting TERM=xterm-256color for better WSL colors"
-                << std::endl;
-      setenv("TERM", "xterm-256color", 1);
-    }
-  }
-}
-
-// Helper function to apply color with attributes (simplified for 256-color)
-void StyleManager::apply_color_pair(int pair_id, ThemeColor theme_color) const
-{
-  int attrs = COLOR_PAIR(pair_id) | theme_color_to_ncurses_attr(theme_color);
-  attrset(attrs);
-}
-
-// Legacy compatibility functions
-
-// Terminal capability detection
 bool StyleManager::supports_256_colors() const { return COLORS >= 256; }
 
 bool StyleManager::supports_true_color() const
@@ -578,15 +414,7 @@ bool StyleManager::supports_true_color() const
                         std::strcmp(colorterm, "24bit") == 0));
 }
 
-void StyleManager::apply_legacy_theme(const Theme &theme)
-{
-  if (initialized)
-  {
-    apply_theme();
-  }
-}
-
-// YAML parsing utilities remain the same
+// YAML parsing utilities
 std::string StyleManager::trim(const std::string &str)
 {
   size_t start = str.find_first_not_of(" \t\n\r");
@@ -642,7 +470,7 @@ bool StyleManager::load_theme_from_yaml(const std::string &yaml_content)
   try
   {
     auto config = parse_yaml(yaml_content);
-    NamedTheme theme;
+    SemanticTheme theme;
 
     auto get_color = [&](const std::string &key,
                          const std::string &default_color) -> std::string
@@ -652,18 +480,45 @@ bool StyleManager::load_theme_from_yaml(const std::string &yaml_content)
     };
 
     theme.name = config.count("name") ? config["name"] : "Custom Theme";
-    theme.background = get_color("background", "#000000");
+
+    // Core
+    theme.background = get_color("background", "transparent");
     theme.foreground = get_color("foreground", "#FFFFFF");
+
+    // State colors - with backward compatibility fallbacks
+    theme.state_active =
+        get_color("state_active", get_color("status_bar_active", "#58A6FF"));
+    theme.state_selected =
+        get_color("state_selected", get_color("selection", "#264F78"));
+    theme.state_hover =
+        get_color("state_hover", get_color("line_highlight", "#161B22"));
+    theme.state_disabled =
+        get_color("state_disabled", get_color("line_numbers", "#6E7681"));
+
+    // Semantic UI - with backward compatibility
+    theme.ui_primary = get_color("ui_primary", "#58A6FF");
+    theme.ui_secondary =
+        get_color("ui_secondary", get_color("comment", "#8B949E"));
+    theme.ui_accent = get_color("ui_accent", get_color("decorator", "#D2A8FF"));
+    theme.ui_success =
+        get_color("ui_success", get_color("string_literal", "#7EE787"));
+    theme.ui_warning = get_color("ui_warning", "#E3B341");
+    theme.ui_error = get_color("ui_error", get_color("keyword", "#FF7B72"));
+    theme.ui_info = get_color("ui_info", get_color("type", "#79C0FF"));
+    theme.ui_border = get_color("ui_border", "#30363D");
+
+    // Editor-specific
     theme.cursor = get_color("cursor", "#FFFFFF");
-    theme.selection = get_color("selection", "#0000FF");
-    theme.line_highlight = get_color("line_highlight", "#333333");
     theme.line_numbers = get_color("line_numbers", "#808080");
     theme.line_numbers_active = get_color("line_numbers_active", "#FFFFFF");
+    theme.line_highlight = get_color("line_highlight", "#333333");
+
+    // Status bar
     theme.status_bar_bg = get_color("status_bar_bg", "#000080");
     theme.status_bar_fg = get_color("status_bar_fg", "#FFFFFF");
     theme.status_bar_active = get_color("status_bar_active", "#00FFFF");
 
-    // Semantic categories
+    // Syntax (keep all existing ones)
     theme.keyword = get_color("keyword", "#569CD6");
     theme.string_literal = get_color("string_literal", "#CE9178");
     theme.number = get_color("number", "#B5CEA8");
@@ -738,7 +593,7 @@ bool StyleManager::load_theme_from_file(const std::string &file_path)
 // Global instance
 StyleManager g_style_manager;
 
-// Legacy API functions for backward compatibility
+// Legacy API functions
 void init_colors() { g_style_manager.initialize(); }
 
 void load_default_theme()
@@ -747,9 +602,4 @@ void load_default_theme()
   {
     g_style_manager.initialize();
   }
-}
-
-void apply_theme(const Theme &theme)
-{
-  g_style_manager.apply_legacy_theme(theme);
 }

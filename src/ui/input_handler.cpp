@@ -42,9 +42,11 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
   }
 
   // Global shortcuts (Ctrl+S, Ctrl+Z, etc.)
+  // FIX: If a global shortcut is handled, return immediately
+  // This prevents the movement key handler from clearing the selection
   if (auto result = handleGlobalShortcut(key))
   {
-    return *result; // Return whatever KeyResult it gave us
+    return *result; // Return immediately - don't process movement keys
   }
 
   // Movement keys (handles both normal and shift+movement for selection)
@@ -85,7 +87,6 @@ InputHandler::handleGlobalShortcut(int key)
     return KeyResult::REDRAW;
 
   case CTRL('z'):
-    // std::cerr << "Clicked CTRL+Z!";
     editor_.undo();
     return KeyResult::REDRAW;
 
@@ -94,25 +95,25 @@ InputHandler::handleGlobalShortcut(int key)
     return KeyResult::REDRAW;
 
   case CTRL('q'):
-    // // TODO: Check for unsaved changes and prompt
-    // if (editor_.hasUnsavedChanges())
-    // {
-    //   // For now, just quit - add confirmation dialog later
-    //   exit(0);
-    // }
-    // exit(0);
-    // return true;
     return KeyResult::QUIT;
 
   case CTRL('c'):
-    editor_.copySelection();
+    // FIX: Only copy if there's actually a selection
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.copySelection();
+    }
     return KeyResult::REDRAW;
 
   case CTRL('x'):
-    editor_.cutSelection();
+    // FIX: Only cut if there's actually a selection
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.cutSelection();
+    }
     return KeyResult::REDRAW;
 
-  case CTRL('v'):
+  case CTRL('p'):
     editor_.pasteFromClipboard();
     return KeyResult::REDRAW;
 
@@ -152,7 +153,41 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
     break;
   }
 
-  // IMPROVED: Start selection BEFORE movement if shift held
+  // Determine if this is actually a movement key
+  bool is_movement_key = false;
+  switch (key)
+  {
+  case KEY_LEFT:
+  case KEY_SLEFT:
+  case KEY_RIGHT:
+  case KEY_SRIGHT:
+  case KEY_UP:
+  case KEY_SR:
+  case KEY_DOWN:
+  case KEY_SF:
+  case KEY_HOME:
+  case KEY_END:
+  case KEY_PPAGE:
+  case KEY_NPAGE:
+#ifdef _WIN32
+  case PDC_KEY_LEFT:
+  case PDC_KEY_RIGHT:
+  case PDC_KEY_UP:
+  case PDC_KEY_DOWN:
+  case KEY_SUP:
+  case KEY_SDOWN:
+#endif
+    is_movement_key = true;
+    break;
+  }
+
+  // If not a movement key, return early
+  if (!is_movement_key)
+  {
+    return false;
+  }
+
+  // Now handle selection state
   if (extending_selection)
   {
     editor_.startSelectionIfNeeded();
@@ -225,12 +260,9 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
     editor_.pageDown();
     moved = true;
     break;
-
-  default:
-    return false;
   }
 
-  // IMPROVED: Always update selection end if extending
+  // Update selection end if extending
   if (moved && extending_selection)
   {
     editor_.updateSelectionEnd();
@@ -238,6 +270,7 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
 
   return moved;
 }
+
 bool InputHandler::handleEditingKey(int key)
 {
   switch (key)
@@ -270,7 +303,6 @@ bool InputHandler::handleEditingKey(int key)
 
   case KEY_ENTER:
   case '\r':
-    // case '\n':
     // Delete selection first if one exists
     if (editor_.hasSelection || editor_.isSelecting)
     {

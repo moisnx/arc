@@ -1,20 +1,37 @@
 name: "Cyberpunk Neon"
 
-# 💻 UI Colors
+# Core colors
 background: "#000000"
 foreground: "#E0E0E0"
+
+# State colors
+state_active: "#00FFFF"
+state_selected: "#1A1A1A"
+state_hover: "#111111"
+state_disabled: "#555555"
+
+# Semantic UI colors
+ui_primary: "#00FFFF"
+ui_secondary: "#808080"
+ui_accent: "#FF00FF"
+ui_success: "#39FF14"
+ui_warning: "#FFCC00"
+ui_error: "#FF00FF"
+ui_info: "#00FFFF"
+ui_border: "#1A1A1A"
+
+# Editor-specific
 cursor: "#00FFFF"
-selection: "#1A1A1A"
-line_highlight: "#111111"
 line_numbers: "#555555"
 line_numbers_active: "#FF00FF"
+line_highlight: "#111111"
 
-# 📊 Status Bar
+# Status bar
 status_bar_bg: "#111111"
 status_bar_fg: "#E0E0E0"
 status_bar_active: "#00FFFF"
 
-# ✨ Semantic categories
+# Syntax highlighting
 keyword: "#FF00FF"
 string_literal: "#39FF14"
 number: "#00FFFF"
@@ -31,7 +48,7 @@ decorator: "#FF6EC7"
 macro: "#FF00FF"
 label: "#FF00FF"
 
-# 📝 Markup
+# Markup
 markup_heading: "#FF00FF"
 markup_bold: "#FFCC00"
 markup_italic: "#39FF14"

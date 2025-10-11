@@ -99,7 +99,6 @@ private:
   std::atomic<bool> is_parsing_{false};
   std::atomic<bool> parse_complete_{false};
   mutable std::mutex tree_mutex_;
-  mutable bool tree_needs_reparse_ = false;
 
   std::atomic<uint64_t> tree_version_{0};
   void backgroundParse(const GapBuffer &buffer);
@@ -151,4 +150,42 @@ private:
   // Fallback highlighting
   std::vector<ColorSpan> getBasicHighlightSpans(const std::string &line) const;
   void loadBasicRules();
+  /**
+   * Updates the buffer content string incrementally instead of rebuilding
+   * @param byte_pos Starting byte position of edit
+   * @param old_byte_len Number of bytes deleted
+   * @param new_byte_len Number of bytes inserted
+   * @param buffer Reference to gap buffer for reading new content
+   */
+  void updateBufferContentIncremental(size_t byte_pos, size_t old_byte_len,
+                                      size_t new_byte_len,
+                                      const GapBuffer &buffer);
+
+  /**
+   * Rebuilds the entire buffer content string from gap buffer
+   * Only called when incremental update fails or on initial load
+   */
+  void rebuildBufferContent(const GapBuffer &buffer);
+
+  /**
+   * Invalidates only the exact lines affected by an edit
+   * Also handles shifting cache entries when lines are added/removed
+   * @param start_row First row affected by edit
+   * @param old_end_row Last row in old tree
+   * @param new_end_row Last row in new tree
+   */
+  void invalidateAffectedLinesOnly(uint32_t start_row, uint32_t old_end_row,
+                                   uint32_t new_end_row);
+
+  /**
+   * Triggers incremental reparse of edited regions
+   * Uses old tree for fast incremental parsing
+   */
+  void reparseDirtyRegions(const GapBuffer &buffer);
+  void shiftLineCacheAfterEdit(int startLine, int lineDelta);
+
+  // NEW: Query an entire region at once (for multi-line constructs)
+  std::vector<ColorSpan>
+  executeTreeSitterQueryForRegion(int startLine, int endLine,
+                                  const GapBuffer &buffer) const;
 };
