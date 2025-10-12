@@ -10,6 +10,8 @@ set(DEPS_DIR ${CMAKE_SOURCE_DIR}/deps)
 # Initialize Tree-sitter as enabled by default
 set(TREE_SITTER_ENABLED TRUE)
 
+set(DEV_DEBUG_ENABLED TRUE)
+
 # Debug Delta
 # add_compile_definitions(DEBUG_DELTA_UNDO)
 
