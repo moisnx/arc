@@ -11,6 +11,8 @@
 #ifdef _WIN32
 #include <curses.h>
 #include <windows.h>
+#undef min
+#undef max
 #else
 #include <ncursesw/ncurses.h>
 #endif

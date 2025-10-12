@@ -6,6 +6,8 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#undef min
+#undef max
 #else
 #include <unistd.h>
 #endif
