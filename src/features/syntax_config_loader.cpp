@@ -228,9 +228,9 @@ bool SyntaxConfigLoader::loadAllLanguageConfigs(
     const std::string &config_directory)
 {
   // Debug: Show current working directory
-  std::cerr << "DEBUG: Current working directory: "
-            << std::filesystem::current_path() << std::endl;
-  std::cerr << "DEBUG: Looking for registry file..." << std::endl;
+  // std::cerr << "DEBUG: Current working directory: "
+  //           << std::filesystem::current_path() << std::endl;
+  // std::cerr << "DEBUG: Looking for registry file..." << std::endl;
 
   // Try multiple possible locations for the registry file
   std::vector<std::string> registry_paths = {"runtime/languages.yaml",
@@ -256,13 +256,13 @@ bool SyntaxConfigLoader::loadAllLanguageConfigs(
   // Try each possible registry location
   for (const auto &registry_path : registry_paths)
   {
-    std::cerr << "  Checking: " << registry_path << " ... ";
+    // std::cerr << "  Checking: " << registry_path << " ... ";
     if (std::filesystem::exists(registry_path))
     {
-      std::cerr << "FOUND!" << std::endl;
+      // std::cerr << "FOUND!" << std::endl;
       return loadFromRegistry(registry_path);
     }
-    std::cerr << "not found" << std::endl;
+    // std::cerr << "not found" << std::endl;
   }
 
   // Legacy fallback: Load individual YAML files
