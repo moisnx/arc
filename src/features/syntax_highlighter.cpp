@@ -311,33 +311,12 @@ void SyntaxHighlighter::updateTreeAfterEdit(
     uint32_t new_end_col)
 {
 #ifdef TREE_SITTER_ENABLED
-  // 1. Open the debug file for appending. It will be closed automatically when
-  // it goes out of scope at the end of the function.
-  std::ofstream debug_log("debug.txt", std::ios_base::app);
-
   if (!tree_ || !parser_ || !current_ts_language_)
     return;
 
-  // Only proceed with logging if the file is successfully opened.
-  if (!debug_log.is_open())
-  {
-    return;
-  }
-
-  auto total_start = std::chrono::high_resolution_clock::now();
-
-  auto lock_start = std::chrono::high_resolution_clock::now();
   std::lock_guard<std::mutex> lock(tree_mutex_);
-  auto lock_end = std::chrono::high_resolution_clock::now();
-
-  auto lock_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     lock_end - lock_start)
-                     .count();
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] Lock acquire: " << lock_ms << "ms\n";
 
   // Step 1: Apply the edit to the tree structure
-  auto edit_start = std::chrono::high_resolution_clock::now();
   TSInputEdit edit = {.start_byte = (uint32_t)byte_pos,
                       .old_end_byte = (uint32_t)(byte_pos + old_byte_len),
                       .new_end_byte = (uint32_t)(byte_pos + new_byte_len),
@@ -347,13 +326,6 @@ void SyntaxHighlighter::updateTreeAfterEdit(
 
   ts_tree_edit(tree_, &edit);
   tree_version_++;
-  auto edit_end = std::chrono::high_resolution_clock::now();
-
-  auto edit_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                     edit_end - edit_start)
-                     .count();
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] ts_tree_edit: " << edit_ms << "ms\n";
 
   // Step 2: Update the content string
   bool needs_content_rebuild = false;
@@ -364,24 +336,12 @@ void SyntaxHighlighter::updateTreeAfterEdit(
     needs_content_rebuild = true;
   }
 
-  auto content_start = std::chrono::high_resolution_clock::now();
-
-  debug_log << "  [DEBUG] empty=" << current_buffer_content_.empty()
-            << " old_end_row=" << old_end_row << " new_end_row=" << new_end_row
-            << " new_byte_len=" << new_byte_len
-            << " old_byte_len=" << old_byte_len << "\n";
-
   if (needs_content_rebuild)
   {
-    // Logging redirected to debug_log (from std::cerr)
-    debug_log << "  [TIMING] Full rebuild triggered (line count: "
-              << buffer.getLineCount() << ")\n";
     current_buffer_content_ = buffer.getText();
   }
   else
   {
-    // Logging redirected to debug_log (from std::cerr)
-    debug_log << "  [TIMING] Fast path used\n";
     if (old_byte_len > 0)
     {
       current_buffer_content_.erase(byte_pos, old_byte_len);
@@ -405,31 +365,13 @@ void SyntaxHighlighter::updateTreeAfterEdit(
       }
     }
   }
-  auto content_end = std::chrono::high_resolution_clock::now();
-
-  auto content_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        content_end - content_start)
-                        .count();
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] Content update: " << content_ms << "ms\n";
 
   // Step 3: Incremental reparse
-  auto parse_start = std::chrono::high_resolution_clock::now();
   TSTree *old_tree = tree_;
   tree_ =
       ts_parser_parse_string(parser_, old_tree, current_buffer_content_.c_str(),
                              current_buffer_content_.length());
-  // MOVE THE DEBUG CHECK HERE (before deleting old_tree)
-  if (old_tree && tree_)
-  {
-    uint32_t changed_ranges_count;
-    TSRange *changed_ranges =
-        ts_tree_get_changed_ranges(old_tree, tree_, &changed_ranges_count);
 
-    debug_log << "  [DEBUG] Changed ranges: " << changed_ranges_count << "\n";
-
-    free(changed_ranges);
-  }
   if (tree_)
   {
     if (old_tree)
@@ -437,20 +379,10 @@ void SyntaxHighlighter::updateTreeAfterEdit(
   }
   else
   {
-    // Logging redirected to debug_log (from std::cerr)
-    debug_log << "WARNING: Incremental parse failed, keeping old tree\n";
     tree_ = old_tree;
   }
-  auto parse_end = std::chrono::high_resolution_clock::now();
-
-  auto parse_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      parse_end - parse_start)
-                      .count();
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] ts_parser_parse_string: " << parse_ms << "ms\n";
 
   // Step 4: Cache invalidation
-  auto cache_start = std::chrono::high_resolution_clock::now();
   int invalidate_start = std::min((int)start_row, (int)old_end_row);
   int invalidate_end = std::max((int)new_end_row, invalidate_start + 50);
 
@@ -459,23 +391,6 @@ void SyntaxHighlighter::updateTreeAfterEdit(
   {
     line_cache_.erase(line);
   }
-  auto cache_end = std::chrono::high_resolution_clock::now();
-
-  auto cache_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      cache_end - cache_start)
-                      .count();
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] Cache invalidation: " << cache_ms << "ms\n";
-
-  auto total_end = std::chrono::high_resolution_clock::now();
-  auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      total_end - total_start)
-                      .count();
-
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  [TIMING] TOTAL updateTreeAfterEdit: " << total_ms << "ms\n";
-  // Logging redirected to debug_log (from std::cerr)
-  debug_log << "  =========================================\n";
 
 #endif
 }
