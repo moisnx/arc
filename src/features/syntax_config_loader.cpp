@@ -227,16 +227,42 @@ void SyntaxConfigLoader::debugCurrentState() const
 bool SyntaxConfigLoader::loadAllLanguageConfigs(
     const std::string &config_directory)
 {
-  // DEPRECATED: Check if registry.yaml exists first
-  std::string registry_path = "runtime/languages.yaml";
+  // Debug: Show current working directory
+  std::cerr << "DEBUG: Current working directory: "
+            << std::filesystem::current_path() << std::endl;
+  std::cerr << "DEBUG: Looking for registry file..." << std::endl;
 
-  // std::cerr << "Registry path: " << registry_path << std::endl;
+  // Try multiple possible locations for the registry file
+  std::vector<std::string> registry_paths = {"runtime/languages.yaml",
+                                             "./runtime/languages.yaml",
+                                             "../runtime/languages.yaml"};
 
-  if (std::filesystem::exists(registry_path))
+  // Add executable-relative path
+  try
   {
-    // std::cerr << "Found registry.yaml, using unified registry loading"
-    //           << std::endl;
-    return loadFromRegistry(registry_path);
+    std::filesystem::path exe_path = std::filesystem::current_path();
+    registry_paths.push_back(
+        (exe_path / "runtime" / "languages.yaml").string());
+
+    // Also try parent directory (in case we're in build/)
+    registry_paths.push_back(
+        (exe_path.parent_path() / "runtime" / "languages.yaml").string());
+  }
+  catch (...)
+  {
+    // Ignore errors in path construction
+  }
+
+  // Try each possible registry location
+  for (const auto &registry_path : registry_paths)
+  {
+    std::cerr << "  Checking: " << registry_path << " ... ";
+    if (std::filesystem::exists(registry_path))
+    {
+      std::cerr << "FOUND!" << std::endl;
+      return loadFromRegistry(registry_path);
+    }
+    std::cerr << "not found" << std::endl;
   }
 
   // Legacy fallback: Load individual YAML files
@@ -247,13 +273,25 @@ bool SyntaxConfigLoader::loadAllLanguageConfigs(
   {
     if (!std::filesystem::exists(config_directory))
     {
-      std::cerr << "ERROR: Config directory does not exist!" << std::endl;
+      std::cerr << "ERROR: Config directory does not exist: "
+                << config_directory << std::endl;
+
+      // Try runtime/queries as fallback
+      std::string runtime_queries = "runtime/queries";
+      if (std::filesystem::exists(runtime_queries))
+      {
+        std::cerr << "Attempting to use runtime/queries instead..."
+                  << std::endl;
+        return loadAllLanguageConfigs(runtime_queries);
+      }
+
       return false;
     }
 
     if (!std::filesystem::is_directory(config_directory))
     {
-      std::cerr << "ERROR: Path is not a directory!" << std::endl;
+      std::cerr << "ERROR: Path is not a directory: " << config_directory
+                << std::endl;
       return false;
     }
 
