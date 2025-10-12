@@ -86,6 +86,8 @@ public:
   void forceFullReparse(const GapBuffer &buffer);
   void invalidateFromLine(int startLine);
   void clearAllCache();
+  void setEditing(bool editing) { is_editing_ = editing; }
+  bool isEditing() const { return is_editing_; }
 
 private:
   // Configuration management
@@ -115,6 +117,7 @@ private:
 
   std::chrono::steady_clock::time_point last_parse_time_;
   static constexpr int PARSE_DEBOUNCE_MS = 500;
+  mutable std::atomic<bool> is_editing_{false};
 
 #ifdef TREE_SITTER_ENABLED
   // Tree-sitter state

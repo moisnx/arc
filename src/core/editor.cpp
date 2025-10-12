@@ -1279,10 +1279,8 @@ void Editor::insertChar(char ch)
                        .count();
 
     // Boundary characters that should trigger immediate commit
-    bool is_boundary_char =
-        (ch == '>' || ch == ')' || ch == '}' || ch == ']' || ch == ';' ||
-         ch == ',' || ch == ' ' || ch == '\t' || ch == '<' || ch == '(' ||
-         ch == '{' || ch == '[');
+    bool is_boundary_char = (ch == '>' || ch == ')' || ch == '}' || ch == ']' ||
+                             ch == ';' || ch == ',');
 
     if (elapsed > UNDO_GROUP_TIMEOUT_MS || is_boundary_char)
     {
