@@ -1,39 +1,69 @@
+# Core dependencies (not in grammars/)
 [submodule "deps/tree-sitter-core"]
 	path = deps/tree-sitter-core
 	url = https://github.com/tree-sitter/tree-sitter.git
-[submodule "deps/tree-sitter-python"]
-	path = deps/tree-sitter-python
-	url = https://github.com/tree-sitter/tree-sitter-python.git
-[submodule "deps/tree-sitter-c"]
-	path = deps/tree-sitter-c
-	url = https://github.com/tree-sitter/tree-sitter-c.git
-[submodule "deps/tree-sitter-markdown"]
-	path = deps/tree-sitter-markdown
-	url = https://github.com/tree-sitter-grammars/tree-sitter-markdown.git
-[submodule "deps/tree-sitter-cpp"]
-	path = deps/tree-sitter-cpp
-	url = https://github.com/tree-sitter/tree-sitter-cpp
-[submodule "deps/tree-sitter-rust"]
-	path = deps/tree-sitter-rust
-	url = https://github.com/tree-sitter/tree-sitter-rust
+
 [submodule "deps/efsw"]
 	path = deps/efsw
 	url = https://github.com/SpartanJ/efsw
-[submodule "deps/tree-sitter-javascript"]
-	path = deps/tree-sitter-javascript
-	url = https://github.com/tree-sitter/tree-sitter-javascript
-[submodule "deps/tree-sitter-typescript"]
-	path = deps/tree-sitter-typescript
-	url = https://github.com/tree-sitter/tree-sitter-typescript
-[submodule "deps/tree-sitter-zig"]
-	path = deps/tree-sitter-zig
-	url = https://github.com/GrayJack/tree-sitter-zig
-[submodule "deps/tree-sitter-go"]
-	path = deps/tree-sitter-go
-	url = https://github.com/tree-sitter/tree-sitter-go
+
 [submodule "deps/pdcursesmod"]
 	path = deps/pdcursesmod
 	url = https://github.com/Bill-Gray/PDCursesMod
-[submodule "deps/tree-sitter-html"]
-	path = deps/tree-sitter-html
+
+# Tree-sitter language parsers (in grammars/)
+[submodule "deps/grammars/tree-sitter-python"]
+	path = deps/grammars/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python.git
+
+[submodule "deps/grammars/tree-sitter-c"]
+	path = deps/grammars/tree-sitter-c
+	url = https://github.com/tree-sitter/tree-sitter-c.git
+
+[submodule "deps/grammars/tree-sitter-cpp"]
+	path = deps/grammars/tree-sitter-cpp
+	url = https://github.com/tree-sitter/tree-sitter-cpp
+
+[submodule "deps/grammars/tree-sitter-rust"]
+	path = deps/grammars/tree-sitter-rust
+	url = https://github.com/tree-sitter/tree-sitter-rust
+
+[submodule "deps/grammars/tree-sitter-javascript"]
+	path = deps/grammars/tree-sitter-javascript
+	url = https://github.com/tree-sitter/tree-sitter-javascript
+
+[submodule "deps/grammars/tree-sitter-typescript"]
+	path = deps/grammars/tree-sitter-typescript
+	url = https://github.com/tree-sitter/tree-sitter-typescript
+
+[submodule "deps/grammars/tree-sitter-zig"]
+	path = deps/grammars/tree-sitter-zig
+	url = https://github.com/GrayJack/tree-sitter-zig
+
+[submodule "deps/grammars/tree-sitter-go"]
+	path = deps/grammars/tree-sitter-go
+	url = https://github.com/tree-sitter/tree-sitter-go
+
+[submodule "deps/grammars/tree-sitter-html"]
+	path = deps/grammars/tree-sitter-html
 	url = https://github.com/tree-sitter/tree-sitter-html
+
+[submodule "deps/grammars/tree-sitter-markdown"]
+	path = deps/grammars/tree-sitter-markdown
+	url = https://github.com/tree-sitter-grammars/tree-sitter-markdown.git
+	
+[submodule "deps/grammars/tree-sitter-ruby"]
+	path = deps/grammars/tree-sitter-ruby
+	url = https://github.com/tree-sitter/tree-sitter-ruby
+[submodule "deps/grammars/tree-sitter-bash"]
+	path = deps/grammars/tree-sitter-bash
+	url = https://github.com/tree-sitter/tree-sitter-bash
+[submodule "deps/grammars/tree-sitter-yaml"]
+	path = deps/grammars/tree-sitter-yaml
+	url = https://github.com/ikatyang/tree-sitter-yaml
+[submodule "deps/grammars/tree-sitter-toml"]
+	path = deps/grammars/tree-sitter-toml
+	url = https://github.com/ikatyang/tree-sitter-toml
+[submodule "deps/grammars/tree-sitter-json"]
+	path = deps/grammars/tree-sitter-json
+	url = https://github.com/tree-sitter/tree-sitter-json
