@@ -7,21 +7,130 @@
 #include <sstream>
 #include <yaml-cpp/yaml.h>
 
+#ifdef TREE_SITTER_ENABLED
+#include "embedded_config.h"
+#endif
+
 SyntaxConfigLoader::SyntaxConfigLoader() {}
 
 bool SyntaxConfigLoader::loadFromRegistry(const std::string &registry_path)
 {
-  // std::cerr << "Loading language registry from: " << registry_path <<
-  // std::endl;
-
   if (!std::filesystem::exists(registry_path))
   {
-    std::cerr << "ERROR: Registry file does not exist: " << registry_path
-              << std::endl;
+    std::cerr << "Registry file does not exist: " << registry_path << std::endl;
     return false;
   }
 
   return parseRegistryFile(registry_path);
+}
+
+bool SyntaxConfigLoader::loadFromString(const std::string &yaml_content)
+{
+  try
+  {
+    YAML::Node root = YAML::Load(yaml_content);
+
+    if (!root["languages"])
+    {
+      std::cerr << "ERROR: No 'languages' section in YAML content" << std::endl;
+      return false;
+    }
+
+    YAML::Node languages = root["languages"];
+    int loaded_count = 0;
+
+    for (auto it = languages.begin(); it != languages.end(); ++it)
+    {
+      std::string lang_key = it->first.as<std::string>();
+      YAML::Node lang_node = it->second;
+
+      auto config = std::make_unique<LanguageConfig>();
+
+      // Parse language configuration
+      if (lang_node["name"])
+      {
+        config->name = lang_node["name"].as<std::string>();
+      }
+      else
+      {
+        config->name = lang_key;
+      }
+
+      if (config->name.empty())
+      {
+        config->name = lang_key;
+      }
+
+      if (lang_node["builtin"])
+        config->builtin = lang_node["builtin"].as<bool>();
+      else
+        config->builtin = true;
+
+      if (lang_node["parser_name"])
+        config->parser_name = lang_node["parser_name"].as<std::string>();
+
+      if (lang_node["query_path"])
+        config->query_file_path = lang_node["query_path"].as<std::string>();
+
+      if (lang_node["queries"] && lang_node["queries"].IsSequence())
+      {
+        for (const auto &query_node : lang_node["queries"])
+        {
+          std::string query_path = query_node.as<std::string>();
+          if (!query_path.empty())
+          {
+            config->queries.push_back(query_path);
+          }
+        }
+      }
+
+      // Parse extensions
+      if (lang_node["extensions"] && lang_node["extensions"].IsSequence())
+      {
+        for (const auto &ext_node : lang_node["extensions"])
+        {
+          std::string ext = ext_node.as<std::string>();
+          if (!ext.empty())
+          {
+            config->extensions.push_back(ext);
+            extension_to_language_[ext] = config->name;
+          }
+        }
+
+        if (config->extensions.empty())
+        {
+          std::cerr << "WARNING: Language '" << lang_key
+                    << "' has no valid extensions, skipping" << std::endl;
+          continue;
+        }
+      }
+      else
+      {
+        std::cerr << "WARNING: Language '" << lang_key
+                  << "' has no extensions defined, skipping" << std::endl;
+        continue;
+      }
+
+      // Store configuration
+      language_configs_[config->name] = std::move(config);
+      loaded_count++;
+    }
+
+    // std::cerr << "Successfully loaded " << loaded_count
+    //           << " languages from YAML content" << std::endl;
+    return loaded_count > 0;
+  }
+  catch (const YAML::ParserException &e)
+  {
+    std::cerr << "ERROR: YAML parsing error: " << e.what() << std::endl;
+    return false;
+  }
+  catch (const std::exception &e)
+  {
+    std::cerr << "ERROR: Exception while parsing YAML: " << e.what()
+              << std::endl;
+    return false;
+  }
 }
 
 bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
@@ -47,28 +156,24 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
 
       auto config = std::make_unique<LanguageConfig>();
 
-      // Parse language configuration
       if (lang_node["name"])
       {
         config->name = lang_node["name"].as<std::string>();
       }
       else
       {
-        config->name = lang_key; // Use key as fallback
+        config->name = lang_key;
       }
 
-      // Ensure name is never empty
       if (config->name.empty())
       {
-        std::cerr << "WARNING: Empty name for language '" << lang_key
-                  << "', using key as name" << std::endl;
         config->name = lang_key;
       }
 
       if (lang_node["builtin"])
         config->builtin = lang_node["builtin"].as<bool>();
       else
-        config->builtin = true; // Default to builtin
+        config->builtin = true;
 
       if (lang_node["parser_name"])
         config->parser_name = lang_node["parser_name"].as<std::string>();
@@ -88,7 +193,6 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
         }
       }
 
-      // Parse extensions (CRITICAL: Must have at least one extension)
       if (lang_node["extensions"] && lang_node["extensions"].IsSequence())
       {
         for (const auto &ext_node : lang_node["extensions"])
@@ -97,7 +201,6 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
           if (!ext.empty())
           {
             config->extensions.push_back(ext);
-            // Map extension to language name
             extension_to_language_[ext] = config->name;
           }
         }
@@ -106,29 +209,21 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
         {
           std::cerr << "WARNING: Language '" << lang_key
                     << "' has no valid extensions, skipping" << std::endl;
-          continue; // Skip this language
+          continue;
         }
       }
       else
       {
         std::cerr << "WARNING: Language '" << lang_key
                   << "' has no extensions defined, skipping" << std::endl;
-        continue; // Skip this language
+        continue;
       }
 
-      // Store configuration
-      std::string stored_name = config->name; // Save for logging
+      std::string stored_name = config->name;
       language_configs_[config->name] = std::move(config);
       loaded_count++;
-
-      // std::cerr << "✓ Loaded: " << lang_key << " -> \"" << stored_name
-      //           << "\" with "
-      //           << language_configs_[stored_name]->extensions.size()
-      //           << " extensions" << std::endl;
     }
 
-    // std::cerr << "Successfully loaded " << loaded_count
-    //           << " languages from registry" << std::endl;
     return loaded_count > 0;
   }
   catch (const YAML::BadFile &e)
@@ -186,9 +281,7 @@ std::string
 SyntaxConfigLoader::getLanguageFromExtension(const std::string &extension) const
 {
   auto it = extension_to_language_.find(extension);
-  std::string result =
-      (it != extension_to_language_.end()) ? it->second : "text";
-  return result;
+  return (it != extension_to_language_.end()) ? it->second : "text";
 }
 
 void SyntaxConfigLoader::debugCurrentState() const
@@ -227,109 +320,97 @@ void SyntaxConfigLoader::debugCurrentState() const
 bool SyntaxConfigLoader::loadAllLanguageConfigs(
     const std::string &config_directory)
 {
-  // Debug: Show current working directory
-  // std::cerr << "DEBUG: Current working directory: "
-  //           << std::filesystem::current_path() << std::endl;
-  // std::cerr << "DEBUG: Looking for registry file..." << std::endl;
+  // Fallback chain:
+  // 1. User config (~/.config/arc/languages.yaml or
+  // %APPDATA%/arc/languages.yaml)
+  // 2. System config (/usr/local/share/arc/languages.yaml or C:/Program
+  // Files/arc/languages.yaml)
+  // 3. Development config (./runtime/languages.yaml)
+  // 4. Embedded config (compiled into binary)
 
-  // Try multiple possible locations for the registry file
-  std::vector<std::string> registry_paths = {"runtime/languages.yaml",
-                                             "./runtime/languages.yaml",
-                                             "../runtime/languages.yaml"};
+  std::vector<std::string> registry_paths;
 
-  // Add executable-relative path
+// 1. User config directory
+// 1. User config directory
+#ifdef _WIN32
+  const char *appdata = std::getenv("APPDATA");
+  if (appdata)
+  {
+    registry_paths.push_back(std::string(appdata) + "/arc/languages.yaml");
+  }
+  const char *userprofile = std::getenv("USERPROFILE");
+  if (userprofile)
+  {
+    registry_paths.push_back(std::string(userprofile) +
+                             "/.config/arc/languages.yaml");
+  }
+#else
+  const char *xdg_config = std::getenv("XDG_CONFIG_HOME");
+  if (xdg_config)
+  {
+    registry_paths.push_back(std::string(xdg_config) + "/arc/languages.yaml");
+  }
+  const char *home = std::getenv("HOME");
+  if (home)
+  {
+    registry_paths.push_back(std::string(home) + "/.config/arc/languages.yaml");
+  }
+#endif
+
+// 2. System config directory
+#ifdef _WIN32
+  registry_paths.push_back("C:/Program Files/arc/share/languages.yaml");
+  registry_paths.push_back("C:/ProgramData/arc/languages.yaml");
+#else
+  registry_paths.push_back("/usr/local/share/arc/languages.yaml");
+  registry_paths.push_back("/usr/share/arc/languages.yaml");
+  registry_paths.push_back("/opt/arc/share/languages.yaml");
+#endif
+
+  // 3. Development paths (relative to current directory)
+  registry_paths.push_back("runtime/languages.yaml");
+  registry_paths.push_back("./runtime/languages.yaml");
+  registry_paths.push_back("../runtime/languages.yaml");
+  registry_paths.push_back("config/languages.yaml");
+
+  // Try executable-relative paths
   try
   {
     std::filesystem::path exe_path = std::filesystem::current_path();
     registry_paths.push_back(
         (exe_path / "runtime" / "languages.yaml").string());
-
-    // Also try parent directory (in case we're in build/)
     registry_paths.push_back(
         (exe_path.parent_path() / "runtime" / "languages.yaml").string());
   }
   catch (...)
   {
-    // Ignore errors in path construction
   }
 
-  // Try each possible registry location
+  // Try each path in order
   for (const auto &registry_path : registry_paths)
   {
-    // std::cerr << "  Checking: " << registry_path << " ... ";
     if (std::filesystem::exists(registry_path))
     {
-      // std::cerr << "FOUND!" << std::endl;
+      // std::cerr << "✓ Loading languages.yaml from: " << registry_path
+      //           << std::endl;
       return loadFromRegistry(registry_path);
     }
-    // std::cerr << "not found" << std::endl;
   }
 
-  // Legacy fallback: Load individual YAML files
-  std::cerr << "No registry.yaml found, falling back to individual file loading"
+// 4. Fall back to embedded configuration
+#ifdef TREE_SITTER_ENABLED
+  if (embedded_config::hasEmbeddedConfig())
+  {
+    // std::cerr << "✓ Using embedded languages.yaml configuration" <<
+    // std::endl;
+    return loadFromString(embedded_config::languages_yaml);
+  }
+#endif
+
+  std::cerr << "ERROR: No languages.yaml found in any location and no embedded "
+               "config available"
             << std::endl;
-
-  try
-  {
-    if (!std::filesystem::exists(config_directory))
-    {
-      std::cerr << "ERROR: Config directory does not exist: "
-                << config_directory << std::endl;
-
-      // Try runtime/queries as fallback
-      std::string runtime_queries = "runtime/queries";
-      if (std::filesystem::exists(runtime_queries))
-      {
-        std::cerr << "Attempting to use runtime/queries instead..."
-                  << std::endl;
-        return loadAllLanguageConfigs(runtime_queries);
-      }
-
-      return false;
-    }
-
-    if (!std::filesystem::is_directory(config_directory))
-    {
-      std::cerr << "ERROR: Path is not a directory: " << config_directory
-                << std::endl;
-      return false;
-    }
-
-    int success_count = 0;
-
-    for (const auto &entry :
-         std::filesystem::directory_iterator(config_directory))
-    {
-      if (entry.is_regular_file() && entry.path().extension() == ".yaml")
-      {
-        std::string language_name = entry.path().stem().string();
-        std::string config_path = entry.path().string();
-
-        if (loadLanguageConfig(language_name, config_path))
-        {
-          success_count++;
-        }
-        else
-        {
-          std::cerr << "ERROR: Failed to load config for language: "
-                    << language_name << std::endl;
-          return false;
-        }
-      }
-    }
-
-    return success_count > 0;
-  }
-  catch (const std::filesystem::filesystem_error &ex)
-  {
-    std::cerr << "Filesystem error: " << ex.what() << std::endl;
-    return false;
-  }
-  catch (const std::exception &ex)
-  {
-    std::cerr << "General error: " << ex.what() << std::endl;
-    return false;
-  }
+  return false;
 }
 
 bool SyntaxConfigLoader::parseYamlFile(const std::string &filepath,
@@ -360,7 +441,6 @@ bool SyntaxConfigLoader::parseYamlFile(const std::string &filepath,
       if (lang_info["query_file_path"])
         config.query_file_path = lang_info["query_file_path"].as<std::string>();
 
-      // Set builtin to true for legacy configs
       config.builtin = true;
     }
     else

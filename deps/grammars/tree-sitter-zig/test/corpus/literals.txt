@@ -1,0 +1,204 @@
+============================================
+Integer literals
+============================================
+
+10;
+0xF;
+0o7;
+0b100;
+
+---
+
+(source_file
+  (integer_literal)
+  (integer_literal)
+  (integer_literal)
+  (integer_literal))
+
+============================================
+Float literals
+============================================
+
+123.0;
+123.0E+77;
+123.0e+77;
+
+0x103.70p-5;
+0x103.70;
+0x103.70P-5;
+
+---
+
+(source_file
+  (float_literal)
+  (float_literal)
+  (float_literal)
+  (float_literal)
+  (float_literal)
+  (float_literal))
+
+============================================
+Boolean literals
+============================================
+
+true;
+false;
+
+---
+
+(source_file
+  (boolean_literal)
+  (boolean_literal))
+
+============================================
+Null literal
+============================================
+
+null;
+
+---
+
+(source_file (null_literal))
+
+============================================
+Undefined literal
+============================================
+
+undefined;
+
+---
+
+(source_file (undefined_literal))
+
+============================================
+Character literals
+============================================
+
+'';
+'a';
+'ç';
+'🎷';
+'\uEEEE';
+'\u{aaaaaa}';
+'\xFF';
+'\'';
+
+---
+
+(source_file
+  (char_literal)
+  (char_literal)
+  (char_literal)
+  (char_literal)
+  (char_literal
+    (escape_sequence))
+  (char_literal
+    (escape_sequence))
+  (char_literal
+    (escape_sequence))
+  (char_literal
+    (escape_sequence)))
+
+============================================
+String literals
+============================================
+
+"";
+"Hello world!";
+"Null terminated";
+"Escape \uEEEE";
+"Escape \u{aaaaaa}";
+"Escape \xFF";
+"Escape \"";
+
+---
+
+(source_file
+  (string_literal)
+  (string_literal)
+  (string_literal)
+  (string_literal
+    (escape_sequence))
+  (string_literal
+    (escape_sequence))
+  (string_literal
+    (escape_sequence))
+  (string_literal
+    (escape_sequence)))
+
+============================================
+Multiline string literals
+============================================
+json(
+\\  Multiline string test
+\\ Multiline
+,
+hello
+)
+;
+
+\\ line 2
+;
+
+\\ line 3
+;
+
+
+
+\\ \uAAAA
+;
+
+
+---
+
+(source_file
+  (call_expression
+    (identifier)
+    (arguments
+      (multiline_string_literal
+        (string_literal) (string_literal))
+      (identifier)
+    )
+  )
+  (multiline_string_literal (string_literal))
+  (multiline_string_literal (string_literal))
+  (multiline_string_literal (string_literal))
+)
+
+============================================
+Enum literals
+============================================
+
+.Variant;
+.Variant2;
+.Other;
+
+---
+
+(source_file
+  (enum_literal
+    variant: (enum_identifier))
+  (enum_literal
+    variant: (enum_identifier))
+  (enum_literal
+    variant: (enum_identifier)))
+
+============================================
+Range literal
+============================================
+
+0..;
+50.0..249;
+01101...69;
+
+---
+
+(source_file
+  (range_pattern_exclusive
+    start: (integer_literal))
+  (range_pattern_exclusive
+    start: (float_literal)
+    end: (integer_literal))
+  (range_pattern_inclusive
+    start: (integer_literal)
+    end: (integer_literal)))

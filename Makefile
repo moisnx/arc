@@ -1,127 +1,92 @@
-# ================================================================
-# Arc Editor Makefile — Cross-Platform CMake Wrapper
-# ================================================================
+# Add these targets to your existing Makefile
 
-# Default settings
-BUILD_DIR := build
-BUILD_TYPE ?= Release
-TARGET := arc
+# Installation directories
+PREFIX ?= /usr/local
+BINDIR = $(PREFIX)/bin
+DATADIR = $(PREFIX)/share/arc
+QUERYDIR = $(DATADIR)/queries
 
-# Detect OS and compiler
-ifeq ($(OS),Windows_NT)
-    PLATFORM := Windows
-else
-    PLATFORM := $(shell uname -s)
-endif
+# Install the binary and runtime files
+install: build/arc
+	@echo "📦 Installing Arc Editor..."
+	@install -d $(DESTDIR)$(BINDIR)
+	@install -m 755 build/arc $(DESTDIR)$(BINDIR)/arc
+	@echo "✅ Installed binary to $(BINDIR)/arc"
+	
+	@echo "📦 Installing query files..."
+	@install -d $(DESTDIR)$(QUERYDIR)
+	@for lang in runtime/queries/*; do \
+		if [ -d "$$lang" ]; then \
+			lang_name=$$(basename $$lang); \
+			echo "  - Installing $$lang_name queries..."; \
+			install -d $(DESTDIR)$(QUERYDIR)/$$lang_name; \
+			install -m 644 $$lang/*.scm $(DESTDIR)$(QUERYDIR)/$$lang_name/ 2>/dev/null || true; \
+		fi \
+	done
+	@echo "✅ Installed query files to $(QUERYDIR)"
+	
+	@echo "📦 Installing language registry..."
+	@install -d $(DESTDIR)$(DATADIR)
+	@install -m 644 runtime/languages.yaml $(DESTDIR)$(DATADIR)/languages.yaml
+	@echo "✅ Installation complete!"
+	@echo ""
+	@echo "Arc Editor installed to: $(BINDIR)/arc"
+	@echo "Query files installed to: $(QUERYDIR)"
+	@echo ""
+	@echo "Note: Query files are embedded in the binary as fallback."
+	@echo "You can customize queries by placing them in:"
+	@echo "  ~/.config/arceditor/queries/LANGUAGE/TYPE.scm"
 
-# Detect whether we’re using MSVC or something else
-ifdef VisualStudioVersion
-    COMPILER := MSVC
-else
-    # Assume GCC/Clang on Linux/macOS, MinGW on Windows
-    COMPILER := GCC
-endif
+# Uninstall
+uninstall:
+	@echo "🗑️  Uninstalling Arc Editor..."
+	@rm -f $(DESTDIR)$(BINDIR)/arc
+	@rm -rf $(DESTDIR)$(DATADIR)
+	@echo "✅ Uninstalled"
 
-# Pick generator (for CMake)
-ifeq ($(COMPILER),MSVC)
-    GENERATOR := "NMake Makefiles"
-else ifeq ($(PLATFORM),Windows)
-    GENERATOR := "MinGW Makefiles"
-else
-    GENERATOR := "Unix Makefiles"
-endif
+# Install to user directory (no sudo needed)
+install-user: build/arc
+	@echo "📦 Installing Arc Editor (user mode)..."
+	@install -d $(HOME)/.local/bin
+	@install -m 755 build/arc $(HOME)/.local/bin/arc
+	@echo "✅ Installed binary to ~/.local/bin/arc"
+	
+	@echo "📦 Installing query files..."
+	@install -d $(HOME)/.local/share/arc/queries
+	@for lang in runtime/queries/*; do \
+		if [ -d "$$lang" ]; then \
+			lang_name=$$(basename $$lang); \
+			echo "  - Installing $$lang_name queries..."; \
+			install -d $(HOME)/.local/share/arc/queries/$$lang_name; \
+			install -m 644 $$lang/*.scm $(HOME)/.local/share/arc/queries/$$lang_name/ 2>/dev/null || true; \
+		fi \
+	done
+	@echo "✅ Installation complete!"
+	@echo ""
+	@echo "⚠️  Make sure ~/.local/bin is in your PATH"
+	@echo "   Add this to your ~/.bashrc or ~/.zshrc:"
+	@echo "   export PATH=\"\$$HOME/.local/bin:\$$PATH\""
 
-# Compiler overrides (optional)
-CXX ?= g++
-CC ?= gcc
+# Test installation
+test-install:
+	@echo "🧪 Testing query resolution..."
+	@echo ""
+	@echo "Binary location: $$(which arc 2>/dev/null || echo 'NOT IN PATH')"
+	@echo ""
+	@echo "Checking query search paths:"
+	@echo "  1. User config: ~/.config/arceditor/queries/"
+	@ls -la ~/.config/arceditor/queries/ 2>/dev/null && echo "    ✅ Found" || echo "    ❌ Not found (OK - this is for custom queries)"
+	@echo ""
+	@echo "  2. System install: /usr/local/share/arc/queries/"
+	@ls -la /usr/local/share/arc/queries/ 2>/dev/null && echo "    ✅ Found" || echo "    ❌ Not found"
+	@echo ""
+	@echo "  3. User install: ~/.local/share/arc/queries/"
+	@ls -la ~/.local/share/arc/queries/ 2>/dev/null && echo "    ✅ Found" || echo "    ❌ Not found"
+	@echo ""
+	@echo "  4. Embedded: Built into binary"
+	@echo "    ✅ Always available"
+	@echo ""
+	@echo "Test: arc should work from any directory"
+	@cd /tmp && arc --version 2>/dev/null && echo "✅ Works!" || echo "⚠️  Check your installation"
 
-# CMake configuration flags
-CMAKE_FLAGS := -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
-CMAKE_FLAGS += -DCMAKE_CXX_COMPILER="$(CXX)"
-CMAKE_FLAGS += -DCMAKE_C_COMPILER="$(CC)"
-
-# ================================================================
-# Targets
-# ================================================================
-
-.PHONY: all configure build run clean rebuild debug release info tree
-
-# ------------------------------------------------
-# 1. Configure CMake project
-# ------------------------------------------------
-configure:
-	@echo "🔧 Configuring Arc Editor..."
-	@cmake -S . -B $(BUILD_DIR) -G $(GENERATOR) $(CMAKE_FLAGS)
-
-# ------------------------------------------------
-# 2. Build project
-# ------------------------------------------------
-build: configure
-	@echo "🚀 Building Arc Editor ($(BUILD_TYPE))..."
-ifeq ($(COMPILER),MSVC)
-	@cmake --build $(BUILD_DIR) --config $(BUILD_TYPE) -- /m
-else
-	@cmake --build $(BUILD_DIR) --config $(BUILD_TYPE) -j
-endif
-
-# ------------------------------------------------
-# 3. Run executable
-# ------------------------------------------------
-run: build
-	@echo "▶️ Running Arc..."
-ifeq ($(PLATFORM),Windows)
-	@$(BUILD_DIR)/$(TARGET).exe
-else
-	@$(BUILD_DIR)/$(TARGET)
-endif
-
-# ------------------------------------------------
-# 4. Clean build files
-# ------------------------------------------------
-clean:
-	@echo "🧹 Cleaning build directory..."
-ifeq ($(COMPILER),MSVC)
-	@cmake --build $(BUILD_DIR) --target clean --config $(BUILD_TYPE) || true
-else
-	@cmake --build $(BUILD_DIR) --target clean || true
-endif
-	@rm -rf $(BUILD_DIR)
-
-# ------------------------------------------------
-# 5. Rebuild (clean + build)
-# ------------------------------------------------
-rebuild: clean all
-
-# ------------------------------------------------
-# 6. Debug/Release quick targets
-# ------------------------------------------------
-debug:
-	@$(MAKE) BUILD_TYPE=Debug build
-
-release:
-	@$(MAKE) BUILD_TYPE=Release build
-
-# ------------------------------------------------
-# 7. Show basic build info
-# ------------------------------------------------
-info:
-	@echo "========================================"
-	@echo "🧩 Arc Editor Build Info"
-	@echo "Platform: $(PLATFORM)"
-	@echo "Compiler: $(COMPILER)"
-	@echo "Generator: $(GENERATOR)"
-	@echo "Build Type: $(BUILD_TYPE)"
-	@echo "Build Directory: $(BUILD_DIR)"
-	@echo "========================================"
-
-# ------------------------------------------------
-# 8. Show Tree-sitter parsers (if any)
-# ------------------------------------------------
-tree:
-	@echo "🌳 Listing Tree-sitter parsers..."
-	@grep -E "Built parser:|Registered parsers" $(BUILD_DIR)/CMakeOutput.log 2>/dev/null || echo "No parsers found (build first)."
-
-# ------------------------------------------------
-# Default target
-# ------------------------------------------------
-all: build
+.PHONY: install uninstall install-user test-install

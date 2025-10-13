@@ -17,6 +17,8 @@
 #include "tree_sitter/api.h"
 #endif
 
+#include "query_manager.h"
+
 SyntaxHighlighter::SyntaxHighlighter()
     : config_loader_(std::make_unique<SyntaxConfigLoader>()),
       current_language_config_(nullptr), currentLanguage("text")
@@ -73,44 +75,8 @@ bool SyntaxHighlighter::initialize(const std::string &config_directory)
   return true;
 }
 
-#ifdef TREE_SITTER_ENABLED
-
-void SyntaxHighlighter::diagnoseGrammar() const
-{
-  if (!current_ts_language_)
-  {
-    std::cerr << "ERROR: No language loaded" << std::endl;
-    return;
-  }
-
-  std::cerr << "=== Grammar Diagnostic ===" << std::endl;
-  std::cerr << "ABI Version: " << ts_language_abi_version(current_ts_language_)
-            << std::endl;
-  std::cerr << "Symbol count: "
-            << ts_language_symbol_count(current_ts_language_) << std::endl;
-
-  // Test a simple parse
-  const char *test_code = "int x;";
-  TSTree *test_tree = ts_parser_parse_string(parser_, nullptr, test_code,
-                                             std::strlen(test_code));
-
-  if (test_tree)
-  {
-    TSNode root = ts_tree_root_node(test_tree);
-    char *tree_string = ts_node_string(root);
-    std::cerr << "Parse test result: " << tree_string << std::endl;
-    free(tree_string);
-    ts_tree_delete(test_tree);
-  }
-  else
-  {
-    std::cerr << "ERROR: Failed to parse simple test code" << std::endl;
-  }
-
-  std::cerr << "=== End Diagnostic ===" << std::endl;
-}
-
-#endif
+// Replace the setLanguage() method in syntax_highlighter.cpp with this debug
+// version:
 
 void SyntaxHighlighter::setLanguage(const std::string &extension)
 {
@@ -146,68 +112,142 @@ void SyntaxHighlighter::setLanguage(const std::string &extension)
           current_ts_query_ = nullptr;
         }
 
-        // Load and merge all queries
-        if (!config->queries.empty())
+        // DEBUG: Show what we're loading
+        // std::cerr << "\n=== QUERY LOADING DEBUG for " << config->parser_name
+        //           << " ===" << std::endl;
+
+        // CHANGED: Don't use getAvailableQueries - it might be getting stale
+        // data Instead, use the queries list from languages.yaml directly
+        std::string merged_query_source;
+
+        if (config->queries.empty())
         {
-          std::string merged_query_source;
+          std::cerr << "ERROR: No queries defined in languages.yaml for "
+                    << config->parser_name << std::endl;
+          loadBasicRules();
+          return;
+        }
 
-          for (const auto &query_path : config->queries)
+        // std::cerr << "Queries defined in languages.yaml: "
+        //           << config->queries.size() << std::endl;
+        // for (const auto &query_path : config->queries)
+        // {
+        //   std::cerr << "  - " << query_path << std::endl;
+        // }
+
+        // FIXED: Use loadQueriesFromPaths which handles:
+        // 1. Multiple query dependencies (C++ -> C + C++)
+        // 2. Proper fallback chain (dev -> user -> system -> embedded)
+        // std::cerr << "Loading queries from paths defined in
+        // languages.yaml..."
+        //           << std::endl;
+
+        // Enable verbose mode for debugging
+        QueryManager::setVerbose(true);
+
+        merged_query_source =
+            QueryManager::loadQueriesFromPaths(config->queries);
+
+        QueryManager::setVerbose(false);
+
+        // std::cerr << "\nTotal merged query size: "
+        //           << merged_query_source.length() << " bytes" << std::endl;
+        // std::cerr << "=== END QUERY LOADING DEBUG ===" << std::endl;
+
+        // Parse the merged query
+        if (!merged_query_source.empty())
+        {
+          uint32_t error_offset;
+          TSQueryError error_type;
+          current_ts_query_ = ts_query_new(
+              current_ts_language_, merged_query_source.c_str(),
+              merged_query_source.length(), &error_offset, &error_type);
+
+          if (!current_ts_query_)
           {
-            std::ifstream file(query_path);
-            if (!file.is_open())
+            std::cerr << "\n❌ ERROR: Failed to parse merged query for "
+                      << config->parser_name << std::endl;
+            std::cerr << "  Error offset: " << error_offset << std::endl;
+            std::cerr << "  Error type: " << error_type;
+
+            // Provide detailed error information
+            switch (error_type)
             {
-              std::cerr << "ERROR: Cannot open query file: " << query_path
-                        << std::endl;
-              continue;
+            case TSQueryErrorNone:
+              std::cerr << " (None)";
+              break;
+            case TSQueryErrorSyntax:
+              std::cerr << " (Syntax Error)";
+              break;
+            case TSQueryErrorNodeType:
+              std::cerr << " (Unknown Node Type)";
+              break;
+            case TSQueryErrorField:
+              std::cerr << " (Unknown Field)";
+              break;
+            case TSQueryErrorCapture:
+              std::cerr << " (Unknown Capture)";
+              break;
+            case TSQueryErrorStructure:
+              std::cerr << " (Invalid Structure)";
+              break;
+            default:
+              std::cerr << " (Unknown Error)";
+              break;
+            }
+            std::cerr << std::endl;
+
+            // Show context around error
+            if (error_offset < merged_query_source.length())
+            {
+              int context_start = std::max(0, (int)error_offset - 100);
+              int context_end = std::min((int)merged_query_source.length(),
+                                         (int)error_offset + 100);
+
+              std::cerr << "\nContext around error:" << std::endl;
+              std::cerr << "..."
+                        << merged_query_source.substr(
+                               context_start, context_end - context_start)
+                        << "..." << std::endl;
+
+              // Point to error location
+              std::cerr << std::string(error_offset - context_start + 3, ' ')
+                        << "^" << std::endl;
             }
 
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            std::string query_content = buffer.str();
-
-            if (!query_content.empty())
-            {
-              // Add newline between queries for safety
-              if (!merged_query_source.empty())
-              {
-                merged_query_source += "\n";
-              }
-              merged_query_source += query_content;
-            }
+            // Fall back to basic highlighting
+            std::cerr << "Falling back to basic highlighting" << std::endl;
+            loadBasicRules();
           }
-
-          // Parse the merged query once
-          if (!merged_query_source.empty())
+          else
           {
-            uint32_t error_offset;
-            TSQueryError error_type;
-            current_ts_query_ = ts_query_new(
-                current_ts_language_, merged_query_source.c_str(),
-                merged_query_source.length(), &error_offset, &error_type);
+            // Check how many captures we got
+            // uint32_t pattern_count =
+            // ts_query_pattern_count(current_ts_query_); uint32_t capture_count
+            // = ts_query_capture_count(current_ts_query_);
 
-            if (!current_ts_query_)
-            {
-              std::cerr << "ERROR: Failed to parse merged query" << std::endl;
-              std::cerr << "  Error offset: " << error_offset << std::endl;
-              std::cerr << "  Error type: " << error_type << std::endl;
+            // std::cerr << "\n✅ Successfully loaded Tree-sitter query for "
+            //           << config->parser_name << std::endl;
+            // std::cerr << "   Patterns: " << pattern_count << std::endl;
+            // std::cerr << "   Captures: " << capture_count << std::endl;
 
-              // Show context around error
-              if (error_offset < merged_query_source.length())
-              {
-                int context_start = std::max(0, (int)error_offset - 50);
-                int context_end = std::min((int)merged_query_source.length(),
-                                           (int)error_offset + 50);
-
-                std::cerr << "Context around error:" << std::endl;
-                std::cerr << "..."
-                          << merged_query_source.substr(
-                                 context_start, context_end - context_start)
-                          << "..." << std::endl;
-                std::cerr << std::string(error_offset - context_start + 3, ' ')
-                          << "^" << std::endl;
-              }
-            }
+            // List first 10 capture names
+            // std::cerr << "   Sample captures: ";
+            // for (uint32_t i = 0; i < std::min(10u, capture_count); ++i)
+            // {
+            //   uint32_t len;
+            //   const char *name =
+            //       ts_query_capture_name_for_id(current_ts_query_, i, &len);
+            //   std::cerr << std::string(name, len) << " ";
+            // }
+            std::cerr << std::endl;
           }
+        }
+        else
+        {
+          std::cerr << "WARNING: No query content loaded for "
+                    << config->parser_name << std::endl;
+          loadBasicRules();
         }
       }
       else

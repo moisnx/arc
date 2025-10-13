@@ -67,3 +67,35 @@ languages:
     extensions: ["go"]
     parser_name: "go"
     queries: ["runtime/queries/go/highlights.scm"]
+  
+  ruby: 
+    name: "Ruby"
+    extensions: ["rb"]
+    parser_name: "ruby"
+    queries: ["runtime/queries/ruby/highlights.scm"]
+  
+  bash: 
+    name: "Bash"
+    extensions: ["sh", "bashrc", "zshrc"]
+    parser_name: "bash"
+    queries: ["runtime/queries/bash/highlights.scm"]
+  
+  yaml:
+   name: "Yaml"
+   extensions: ["yaml"]
+   parser_name: "yaml"
+   queries: ["runtime/queries/yaml/highlights.scm"]
+
+  toml:
+   name: "Toml"
+   extensions: ["toml"]
+   parser_name: "toml"
+   queries: ["runtime/queries/toml/highlights.scm"]
+  
+  json:
+   name: "JSON"
+   extensions: ["json"]
+   parser_name: "json"
+   queries: ["runtime/queries/json/highlights.scm"]
+
+  

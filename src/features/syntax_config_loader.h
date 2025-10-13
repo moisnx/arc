@@ -1,23 +1,28 @@
+// src/features/syntax_config_loader.h
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-// Language configuration structure
 struct LanguageConfig
 {
   std::string name;
   std::vector<std::string> extensions;
-  bool builtin; // NEW: Is this a built-in language?
-
-  // Tree-sitter specific configuration
-  std::string parser_name;     // e.g., "python" -> maps to tree_sitter_python()
-  std::string query_file_path; // e.g., "syntax_rules/python.scm"
-  std::vector<std::string>
-      queries; // e.g., "javascript" -> queries/ecma/highlights.scm,
-               // queries/javascript/highlights.scm
+  std::vector<std::string> keywords;
+  std::vector<std::string> types;
+  std::vector<std::string> builtin_functions;
+  std::vector<std::string> operators;
+  std::string comment_start;
+  std::string comment_end;
+  std::string string_delimiters;
+  std::string number_pattern;
+  std::string parser_name;
+  std::string query_file_path;
+  std::vector<std::string> queries;
+  bool builtin = true;
 };
 
 class SyntaxConfigLoader
@@ -25,36 +30,28 @@ class SyntaxConfigLoader
 public:
   SyntaxConfigLoader();
 
-  // NEW: Load from unified registry
+  // Load from filesystem
   bool loadFromRegistry(const std::string &registry_path);
-
-  // Legacy: Load individual language config (for backward compatibility)
+  bool loadAllLanguageConfigs(const std::string &config_directory);
   bool loadLanguageConfig(const std::string &language_name,
                           const std::string &config_path);
 
-  // Get loaded language configuration
+  // NEW: Load from embedded string
+  bool loadFromString(const std::string &yaml_content);
+
+  // Getters
   const LanguageConfig *
   getLanguageConfig(const std::string &language_name) const;
-
-  // Get language name from file extension
   std::string getLanguageFromExtension(const std::string &extension) const;
 
-  // Load all language configurations from a directory (DEPRECATED - use
-  // loadFromRegistry)
-  bool loadAllLanguageConfigs(const std::string &config_directory);
-
-  // Debug functionality
+  // Debug
   void debugCurrentState() const;
 
-  // Public for direct access (needed by syntax_highlighter)
-  std::unordered_map<std::string, std::unique_ptr<LanguageConfig>>
-      language_configs_;
+  // Public for reload callback access
+  std::map<std::string, std::unique_ptr<LanguageConfig>> language_configs_;
   std::unordered_map<std::string, std::string> extension_to_language_;
 
 private:
-  // Parse YAML registry file
-  bool parseRegistryFile(const std::string &filepath);
-
-  // Simplified YAML parsing for individual configs (legacy)
   bool parseYamlFile(const std::string &filepath, LanguageConfig &config);
+  bool parseRegistryFile(const std::string &filepath);
 };

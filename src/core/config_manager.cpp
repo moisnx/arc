@@ -28,8 +28,6 @@ EditorConfig ConfigManager::editor_config_;
 SyntaxConfig ConfigManager::syntax_config_;
 
 // --- EFSW Listener Class ---
-
-// We define a custom listener that efsw will use to communicate events.
 class ConfigFileListener : public efsw::FileWatchListener
 {
 public:
@@ -37,12 +35,9 @@ public:
                         const std::string &filename, efsw::Action action,
                         std::string oldFilename) override
   {
-    // We are interested in Modification and Renaming (e.g., atomic save by
-    // editor)
     if (filename == "config.yaml" &&
         (action == efsw::Action::Modified || action == efsw::Action::Moved))
     {
-      // Call the static handler in ConfigManager
       ConfigManager::handleFileChange();
     }
   }
@@ -63,41 +58,49 @@ std::string ConfigManager::getConfigDir()
   std::vector<std::string> search_paths;
 
 #ifdef _WIN32
-  // Windows: %APPDATA%\arceditor
+  // Windows: %APPDATA%\arc
   const char *appdata = std::getenv("APPDATA");
   if (appdata)
   {
-    search_paths.push_back(std::string(appdata) + "\\arceditor");
+    search_paths.push_back(std::string(appdata) + "\\arc");
   }
-  // Fallback: %USERPROFILE%\.config\arceditor
+  // Fallback: %USERPROFILE%\.config\arc
   const char *userprofile = std::getenv("USERPROFILE");
   if (userprofile)
   {
-    search_paths.push_back(std::string(userprofile) + "\\.config\\arceditor");
+    search_paths.push_back(std::string(userprofile) + "\\.config\\arc");
   }
 #else
   // Linux/macOS: XDG_CONFIG_HOME or ~/.config
   const char *xdg_config = std::getenv("XDG_CONFIG_HOME");
   if (xdg_config)
   {
-    search_paths.push_back(std::string(xdg_config) + "/arceditor");
+    search_paths.push_back(std::string(xdg_config) + "/arc");
   }
 
   const char *home = std::getenv("HOME");
   if (home)
   {
-    search_paths.push_back(std::string(home) + "/.config/arceditor");
+    search_paths.push_back(std::string(home) + "/.config/arc");
   }
 #endif
 
-  // Development fallback to use ./config/arceditor
+  // Development fallback - try several locations
   std::string cwd = fs::current_path().string();
-  std::string dev_config_path = cwd + "/.config/arceditor";
+  std::vector<std::string> dev_paths = {
+      cwd + "/.config/arc", // ./config/arc
+      cwd + "/config",      // ./config (simpler structure)
+      "../config",          // ../config
+      "config"              // config (relative)
+  };
 
-  if (fs::exists(dev_config_path) && fs::is_directory(dev_config_path))
+  for (const auto &dev_path : dev_paths)
   {
-    // Insert the local development path as the highest priority
-    search_paths.insert(search_paths.begin(), dev_config_path);
+    if (fs::exists(dev_path) && fs::is_directory(dev_path))
+    {
+      search_paths.insert(search_paths.begin(), dev_path);
+      break; // Only add the first one that exists
+    }
   }
 
   // Find first existing config directory
@@ -112,8 +115,7 @@ std::string ConfigManager::getConfigDir()
     }
   }
 
-  // If no config dir exists, create one in the standard location (first in
-  // search_paths)
+  // If no config dir exists, create one in the standard location
   if (!search_paths.empty())
   {
     std::string target_dir = search_paths[0];
@@ -156,8 +158,7 @@ bool ConfigManager::ensureConfigStructure()
   {
     std::string config_dir = getConfigDir();
 
-    // Create main config directory (already handled in getConfigDir, but safety
-    // check)
+    // Create main config directory
     if (!fs::exists(config_dir))
     {
       fs::create_directories(config_dir);
@@ -165,20 +166,12 @@ bool ConfigManager::ensureConfigStructure()
 
     // Create subdirectories
     std::string themes_dir = config_dir + "/themes";
-    // std::string syntax_dir = config_dir + "/syntax_rules";
 
     if (!fs::exists(themes_dir))
     {
       fs::create_directories(themes_dir);
       std::cerr << "Created themes directory: " << themes_dir << std::endl;
     }
-
-    // if (!fs::exists(syntax_dir))
-    // {
-    //   fs::create_directories(syntax_dir);
-    //   std::cerr << "Created syntax_rules directory: " << syntax_dir
-    //             << std::endl;
-    // }
 
     // Create default config file if it doesn't exist
     std::string config_file = getConfigFile();
@@ -209,7 +202,7 @@ bool ConfigManager::createDefaultConfig(const std::string &config_file)
     config["editor"]["tab_size"] = 4;
     config["editor"]["line_numbers"] = true;
     config["editor"]["cursor_style"] = "auto";
-    config["syntax"]["highlighting"] = "viewport"; // Changed to string
+    config["syntax"]["highlighting"] = "viewport";
 
     std::ofstream file(config_file);
     if (!file.is_open())
@@ -217,7 +210,7 @@ bool ConfigManager::createDefaultConfig(const std::string &config_file)
       std::cerr << "Failed to create default config file" << std::endl;
       return false;
     }
-    file << "# arceditor Configuration File\n";
+    file << "# Arc Editor Configuration File\n";
     file << "# This file is automatically generated\n\n";
     file << config;
     file.close();
@@ -294,7 +287,6 @@ bool ConfigManager::saveConfig()
 
   try
   {
-    // Try to load existing config to preserve comments/structure
     config = YAML::LoadFile(config_file);
   }
   catch (const YAML::BadFile &)
@@ -318,7 +310,7 @@ bool ConfigManager::saveConfig()
       std::cerr << "Failed to open config file for saving" << std::endl;
       return false;
     }
-    file << "# arceditor Configuration File\n\n";
+    file << "# Arc Editor Configuration File\n\n";
     file << config;
     file.close();
     return true;
@@ -343,7 +335,6 @@ void ConfigManager::handleFileChange()
 {
   std::cerr << "Config file modified. Attempting hot reload..." << std::endl;
 
-  // 1. Re-read the configuration file
   if (!loadConfig())
   {
     std::cerr << "Failed to hot reload configuration. File may be invalid."
@@ -351,63 +342,45 @@ void ConfigManager::handleFileChange()
     return;
   }
 
-  // 2. Notify all subscribed components
   for (const auto &callback : reload_callbacks_)
   {
-    // NOTE: In a multi-threaded app, this should be marshaled to the main
-    // thread.
     callback();
   }
   reload_pending_.store(true);
-  // std::cerr << "Configuration hot reload complete." << std::endl;
 }
 
 bool ConfigManager::isReloadPending()
 {
-  // Atomically check the flag and reset it to false in one operation
   return reload_pending_.exchange(false);
 }
 
 bool ConfigManager::startWatchingConfig()
 {
-  // 1. Check if watching is already active
   if (watcher_instance_ && watcher_listener_)
   {
-    return true; // Already watching
+    return true;
   }
 
-  // 2. Instantiate the FileWatcher and Listener
   try
   {
-    // The FileWatcher instance is heavy and should be long-lived
     watcher_instance_ = std::make_unique<efsw::FileWatcher>();
-
-    // The listener is the custom class we defined earlier
     watcher_listener_ = std::make_unique<ConfigFileListener>();
 
-    // 3. Get the directory to watch (the config directory)
     std::string configDir = getConfigDir();
 
-    // 4. Add the watch. The 'true' is for recursive watching,
-    // but the listener only cares about 'config.yaml' anyway.
-    efsw::WatchID watchID = watcher_instance_->addWatch(
-        configDir, watcher_listener_.get(), false // false for non-recursive
-    );
+    efsw::WatchID watchID =
+        watcher_instance_->addWatch(configDir, watcher_listener_.get(), false);
 
     if (watchID < 0)
     {
       std::cerr << "Error: EFSW failed to add watch for config directory: "
                 << configDir << std::endl;
-      // Cleanup pointers if the watch failed
       watcher_instance_.reset();
       watcher_listener_.reset();
       return false;
     }
 
-    // 5. Start the watcher thread
-    watcher_instance_->watch(); // This starts the background thread
-
-    // std::cerr << "Config watching started for: " << configDir << std::endl;
+    watcher_instance_->watch();
     return true;
   }
   catch (const std::exception &e)
@@ -433,11 +406,17 @@ std::string ConfigManager::getThemeFile(const std::string &theme_name)
     return theme_file;
   }
 
-  // Fallback: Check project's "themes" directory for default files
-  std::string dev_theme = "themes/" + theme_name + ".theme";
-  if (fs::exists(dev_theme))
+  // Development fallback paths
+  std::vector<std::string> dev_paths = {"themes/" + theme_name + ".theme",
+                                        "../themes/" + theme_name + ".theme",
+                                        "./themes/" + theme_name + ".theme"};
+
+  for (const auto &dev_theme : dev_paths)
   {
-    return dev_theme;
+    if (fs::exists(dev_theme))
+    {
+      return dev_theme;
+    }
   }
 
   std::cerr << "Theme file not found: " << theme_name << std::endl;
@@ -454,21 +433,26 @@ std::string ConfigManager::getSyntaxFile(const std::string &language)
     return syntax_file;
   }
 
-  // Fallback: Check project's "syntax_rules" directory for default files
-  std::string dev_syntax = "treesitter/" + language + ".yaml";
-  if (fs::exists(dev_syntax))
+  // Development fallback paths
+  std::vector<std::string> dev_paths = {"treesitter/" + language + ".yaml",
+                                        "../treesitter/" + language + ".yaml",
+                                        "syntax_rules/" + language + ".yaml"};
+
+  for (const auto &dev_syntax : dev_paths)
   {
-    return dev_syntax;
+    if (fs::exists(dev_syntax))
+    {
+      return dev_syntax;
+    }
   }
 
-  return ""; // Not found
+  return "";
 }
 
 std::string ConfigManager::getActiveTheme() { return active_theme_; }
 
 bool ConfigManager::setActiveTheme(const std::string &theme_name)
 {
-  // Verify theme exists
   std::string theme_file = getThemeFile(theme_name);
   if (theme_file.empty())
   {
@@ -478,7 +462,7 @@ bool ConfigManager::setActiveTheme(const std::string &theme_name)
   }
 
   active_theme_ = theme_name;
-  saveConfig(); // Persist the change
+  saveConfig();
   return true;
 }
 
@@ -501,7 +485,6 @@ bool ConfigManager::copyProjectFilesToConfig()
           std::string filename = entry.path().filename().string();
           std::string target = target_themes + "/" + filename;
 
-          // Only copy if doesn't exist (don't overwrite user themes)
           if (!fs::exists(target))
           {
             fs::copy_file(entry.path(), target);
@@ -524,7 +507,6 @@ bool ConfigManager::copyProjectFilesToConfig()
           std::string filename = entry.path().filename().string();
           std::string target = target_syntax + "/" + filename;
 
-          // Only copy if doesn't exist
           if (!fs::exists(target))
           {
             fs::copy_file(entry.path(), target);
@@ -575,7 +557,6 @@ std::string ConfigManager::syntaxModeToString(SyntaxMode mode)
   }
 }
 
-// NEW: Setters
 void ConfigManager::setTabSize(int size)
 {
   if (size < 1)

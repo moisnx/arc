@@ -90,95 +90,113 @@ else()
     set(TS_INCLUDES "")
 endif()
 
+
 # ----------------------------------------------------
-# 2. Language Parsers (Auto-Discovery) - FIXED FOR WINDOWS
+# 2. Language Parsers (Manifest-Based Auto-Discovery)
 # ----------------------------------------------------
 
 if(TREE_SITTER_ENABLED)
-    message(STATUS "=== Tree-sitter Auto-Discovery ===")
+    message(STATUS "=== Tree-sitter Manifest-Based Discovery ===")
 
-    # Define parsers - use CMake lists instead of colon-separated strings
-    # Format: list of pairs (lang_name, parser_path)
-    set(PARSER_NAMES
-        "html" "python" "c" "cpp" "rust" "markdown" "javascript" "typescript" "tsx" "zig" "go"
-    )
-    set(PARSER_PATHS
-        "${DEPS_DIR}/tree-sitter-html"
-        "${DEPS_DIR}/tree-sitter-python"
-        "${DEPS_DIR}/tree-sitter-c"
-        "${DEPS_DIR}/tree-sitter-cpp"
-        "${DEPS_DIR}/tree-sitter-rust"
-        "${DEPS_DIR}/tree-sitter-markdown/tree-sitter-markdown"
-        "${DEPS_DIR}/tree-sitter-javascript"
-        "${DEPS_DIR}/tree-sitter-typescript/typescript"
-        "${DEPS_DIR}/tree-sitter-typescript/tsx"
-        "${DEPS_DIR}/tree-sitter-zig"
-        "${DEPS_DIR}/tree-sitter-go"
-    )
+    set(GRAMMAR_MANIFEST "${DEPS_DIR}/grammars/manifest.yaml")
 
-    set(DISCOVERED_PARSERS "")
+    if(NOT EXISTS ${GRAMMAR_MANIFEST})
+        message(WARNING "Grammar manifest not found at ${GRAMMAR_MANIFEST}")
+        message(WARNING "Parsers will not be built. Create manifest.yaml or use legacy discovery.")
+        set(TREE_SITTER_ENABLED FALSE)
+    else()
+        message(STATUS "Reading grammar manifest: ${GRAMMAR_MANIFEST}")
 
-    # Iterate using indices
-    list(LENGTH PARSER_NAMES parser_count)
-    math(EXPR parser_count "${parser_count} - 1")
+        # Read and parse the YAML manifest
+        file(READ ${GRAMMAR_MANIFEST} MANIFEST_CONTENT)
 
-    foreach(i RANGE ${parser_count})
-        list(GET PARSER_NAMES ${i} lang_name)
-        list(GET PARSER_PATHS ${i} parser_dir)
+        set(DISCOVERED_PARSERS "")
+        set(PARSER_PATHS "")
 
-        if(NOT EXISTS ${parser_dir})
-            message(STATUS "  ✗ Skipping ${lang_name}: directory not found at ${parser_dir}")
-            continue()
-        endif()
+        # Parse YAML manually (CMake doesn't have built-in YAML parser)
+        # We look for lines like: "  path: tree-sitter-python"
+        string(REGEX MATCHALL "[a-z_]+:\n[ ]+path: [^\n]+" PARSER_ENTRIES "${MANIFEST_CONTENT}")
 
-        # Collect source files
-        set(PARSER_SOURCES "")
+        foreach(entry ${PARSER_ENTRIES})
+            # Extract parser name (e.g., "python:")
+            string(REGEX MATCH "^([a-z_]+):" _ ${entry})
+            set(parser_name ${CMAKE_MATCH_1})
 
-        # Check for parser.c (required)
-        if(EXISTS ${parser_dir}/src/parser.c)
-            list(APPEND PARSER_SOURCES ${parser_dir}/src/parser.c)
+            # Extract path (e.g., "path: tree-sitter-python")
+            string(REGEX MATCH "path: ([^\n]+)" _ ${entry})
+            set(parser_path ${CMAKE_MATCH_1})
+
+            # Check if enabled (look for "enabled: true" in the same block)
+            # We'll do a simple check: if the block doesn't contain "enabled: false", assume true
+            string(FIND "${entry}" "enabled: false" is_disabled)
+
+            if(is_disabled EQUAL -1) # Not found, so it's enabled
+                set(full_path "${DEPS_DIR}/grammars/${parser_path}")
+
+                if(NOT EXISTS ${full_path})
+                    message(STATUS "  ⚠️  Skipping ${parser_name}: directory not found at ${full_path}")
+                    continue()
+                endif()
+
+                # Check for required parser.c
+                if(NOT EXISTS "${full_path}/src/parser.c")
+                    message(STATUS "  ⚠️  Skipping ${parser_name}: no parser.c at ${full_path}/src/")
+                    continue()
+                endif()
+
+                # Collect source files
+                set(PARSER_SOURCES "${full_path}/src/parser.c")
+
+                # Auto-detect scanner files
+                if(EXISTS "${full_path}/src/scanner.c")
+                    list(APPEND PARSER_SOURCES "${full_path}/src/scanner.c")
+                endif()
+
+                if(EXISTS "${full_path}/src/scanner.cc")
+                    list(APPEND PARSER_SOURCES "${full_path}/src/scanner.cc")
+                endif()
+
+                # Create library
+                add_library(tree-sitter-${parser_name} STATIC ${PARSER_SOURCES})
+
+                # Set as C sources
+                set_source_files_properties(${PARSER_SOURCES} PROPERTIES LANGUAGE C)
+
+                # Set C99 standard
+                target_compile_features(tree-sitter-${parser_name} PUBLIC c_std_99)
+
+                # Force static runtime for parsers
+                if(MSVC)
+                    target_compile_options(tree-sitter-${parser_name} PRIVATE
+                        $<$<CONFIG:Debug>:/MTd>
+                        $<$<CONFIG:Release>:/MT>
+                    )
+                endif()
+
+                # Include directories
+                target_include_directories(tree-sitter-${parser_name} PRIVATE
+                    ${full_path}/src
+                )
+
+                # Add to libraries list
+                list(APPEND TS_LIBRARIES tree-sitter-${parser_name})
+                list(APPEND DISCOVERED_PARSERS ${parser_name})
+
+                message(STATUS "  ✓ Built parser: ${parser_name} (from ${parser_path})")
+            else()
+                message(STATUS "  ⊘ Skipped ${parser_name}: disabled in manifest")
+            endif()
+        endforeach()
+
+        if(NOT DISCOVERED_PARSERS)
+            message(WARNING "No parsers were discovered from manifest!")
+            set(TREE_SITTER_ENABLED FALSE)
         else()
-            message(STATUS "  ✗ Skipping ${lang_name}: no parser.c at ${parser_dir}/src/")
-            continue()
+            message(STATUS "")
+            message(STATUS "Discovered ${CMAKE_MATCH_COUNT} parsers from manifest:")
+            message(STATUS "  ${DISCOVERED_PARSERS}")
         endif()
-
-        # Check for scanner files (optional)
-        if(EXISTS ${parser_dir}/src/scanner.c)
-            list(APPEND PARSER_SOURCES ${parser_dir}/src/scanner.c)
-        endif()
-
-        if(EXISTS ${parser_dir}/src/scanner.cc)
-            list(APPEND PARSER_SOURCES ${parser_dir}/src/scanner.cc)
-        endif()
-
-        # Create library
-        add_library(tree-sitter-${lang_name} STATIC ${PARSER_SOURCES})
-
-        # Set as C sources
-        set_source_files_properties(${PARSER_SOURCES} PROPERTIES LANGUAGE C)
-
-        # Set C99 standard
-        target_compile_features(tree-sitter-${lang_name} PUBLIC c_std_99)
-
-        # Force static runtime for parsers to match main executable
-        if(MSVC)
-            target_compile_options(tree-sitter-${lang_name} PRIVATE
-                $<$<CONFIG:Debug>:/MTd>
-                $<$<CONFIG:Release>:/MT>
-            )
-        endif()
-
-        # Include directories for scanner files
-        target_include_directories(tree-sitter-${lang_name} PRIVATE
-            ${parser_dir}/src
-        )
-
-        # Add to libraries list
-        list(APPEND TS_LIBRARIES tree-sitter-${lang_name})
-        list(APPEND DISCOVERED_PARSERS ${lang_name})
-
-        message(STATUS "  ✓ Built parser: ${lang_name}")
-    endforeach()
+    endif()
 
     # ----------------------------------------------------
     # 3. Generate Language Registry Header (Auto-registration)
@@ -189,15 +207,15 @@ if(TREE_SITTER_ENABLED)
         file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 
         # Build the header file content
-        set(REGISTRY_CONTENT "// Auto-generated by CMake - DO NOT EDIT MANUALLY\n")
-        string(APPEND REGISTRY_CONTENT "// Generated from: ${CMAKE_CURRENT_LIST_FILE}\n\n")
+        set(REGISTRY_CONTENT "// Auto-generated by CMake from manifest.yaml\n")
+        string(APPEND REGISTRY_CONTENT "// DO NOT EDIT MANUALLY\n\n")
         string(APPEND REGISTRY_CONTENT "#pragma once\n\n")
         string(APPEND REGISTRY_CONTENT "#ifdef TREE_SITTER_ENABLED\n\n")
         string(APPEND REGISTRY_CONTENT "#include <tree_sitter/api.h>\n")
         string(APPEND REGISTRY_CONTENT "#include <unordered_map>\n")
         string(APPEND REGISTRY_CONTENT "#include <string>\n\n")
 
-        # Extern declarations for all discovered languages
+        # Extern declarations
         string(APPEND REGISTRY_CONTENT "// External language function declarations\n")
         string(APPEND REGISTRY_CONTENT "extern \"C\" {\n")
         foreach(lang ${DISCOVERED_PARSERS})
@@ -213,7 +231,7 @@ if(TREE_SITTER_ENABLED)
         endforeach()
         string(APPEND REGISTRY_CONTENT "}\n\n")
 
-        # List of available languages as a comment
+        # List of available languages
         string(APPEND REGISTRY_CONTENT "// Available languages: ")
         string(JOIN DISCOVERED_PARSERS ", " LANG_LIST)
         string(APPEND REGISTRY_CONTENT "${LANG_LIST}\n\n")
@@ -225,12 +243,9 @@ if(TREE_SITTER_ENABLED)
 
         message(STATUS "Generated language registry: ${LANG_REGISTRY_FILE}")
         message(STATUS "  Registered parsers: ${DISCOVERED_PARSERS}")
-    else()
-        message(WARNING "No parsers discovered, skipping registry generation")
-        set(TREE_SITTER_ENABLED FALSE)
     endif()
 
-    message(STATUS "=== End Tree-sitter Auto-Discovery ===")
+    message(STATUS "=== End Tree-sitter Discovery ===\n")
 
 endif()
 
@@ -239,6 +254,7 @@ if(NOT TREE_SITTER_ENABLED)
     set(TS_LIBRARIES "")
     set(TS_INCLUDES "")
 endif()
+
 
 # ----------------------------------------------------
 # 4. EFSW (Event File System Watcher) - For Live Reloading
@@ -457,6 +473,222 @@ set(SOURCES
 
 # Create executable
 add_executable(arc ${SOURCES})
+
+if(TREE_SITTER_ENABLED AND DISCOVERED_PARSERS)
+    message(STATUS "=== Embedding Tree-sitter Queries ===")
+
+    set(QUERY_REGISTRY_HEADER "${CMAKE_BINARY_DIR}/generated/embedded_queries.h")
+    set(QUERY_REGISTRY_SOURCE "${CMAKE_BINARY_DIR}/generated/embedded_queries.cpp")
+
+    # Ensure generated directory exists
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+
+    # Start building the header file
+    file(WRITE ${QUERY_REGISTRY_HEADER} "// Auto-generated by CMake - DO NOT EDIT\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "// Generated from: ${CMAKE_CURRENT_LIST_FILE}\n\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "#pragma once\n\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "#ifdef TREE_SITTER_ENABLED\n\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "#include <string>\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "#include <unordered_map>\n\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "namespace embedded_queries {\n\n")
+
+    # Start building the source file
+    file(WRITE ${QUERY_REGISTRY_SOURCE} "// Auto-generated by CMake - DO NOT EDIT\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "#include \"embedded_queries.h\"\n\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "namespace embedded_queries {\n\n")
+
+    set(ALL_EMBEDDED_QUERIES "")
+    set(TOTAL_QUERY_SIZE 0)
+
+    foreach(lang ${DISCOVERED_PARSERS})
+        set(QUERY_DIR "${CMAKE_SOURCE_DIR}/runtime/queries/${lang}")
+
+        if(EXISTS ${QUERY_DIR})
+            # Find all .scm files for this language
+            file(GLOB QUERY_FILES "${QUERY_DIR}/*.scm")
+
+            if(QUERY_FILES)
+                message(STATUS "  📦 Embedding queries for ${lang}:")
+
+                foreach(query_file ${QUERY_FILES})
+                    get_filename_component(query_name ${query_file} NAME_WE)
+
+                    # Read the query file content
+                    file(READ ${query_file} QUERY_CONTENT)
+                    string(LENGTH "${QUERY_CONTENT}" QUERY_SIZE)
+                    math(EXPR TOTAL_QUERY_SIZE "${TOTAL_QUERY_SIZE} + ${QUERY_SIZE}")
+
+                    # Create a unique delimiter for raw string literal
+                    # Use a hash to ensure uniqueness
+                    string(MD5 QUERY_HASH "${QUERY_CONTENT}")
+                    string(SUBSTRING ${QUERY_HASH} 0 8 DELIMITER)
+
+                    # Generate unique identifier
+                    set(VAR_NAME "${lang}_${query_name}_scm")
+
+                    # Write declaration to header
+                    file(APPEND ${QUERY_REGISTRY_HEADER}
+                        "extern const char* ${VAR_NAME};\n")
+
+                    # Write definition to source using raw string literal
+                    # R"DELIMITER(content)DELIMITER" syntax avoids most escaping issues
+                    file(APPEND ${QUERY_REGISTRY_SOURCE}
+                        "const char* ${VAR_NAME} = R\"${DELIMITER}(${QUERY_CONTENT})${DELIMITER}\";\n\n")
+
+                    list(APPEND ALL_EMBEDDED_QUERIES "${lang}:${query_name}")
+
+                    message(STATUS "      - ${query_name}.scm (${QUERY_SIZE} bytes)")
+                endforeach()
+            endif()
+        endif()
+    endforeach()
+
+    # CRITICAL: Also embed queries from special directories like ecma, _javascript, etc.
+    # These are dependencies for languages like JavaScript/TypeScript
+    set(SPECIAL_QUERY_DIRS "ecma" "_javascript" "_jsx" "_typescript")
+    foreach(special_dir ${SPECIAL_QUERY_DIRS})
+        set(QUERY_DIR "${CMAKE_SOURCE_DIR}/runtime/queries/${special_dir}")
+
+        if(EXISTS ${QUERY_DIR})
+            message(STATUS "  📦 Embedding queries for ${special_dir} (dependency):")
+
+            file(GLOB QUERY_FILES "${QUERY_DIR}/*.scm")
+
+            foreach(query_file ${QUERY_FILES})
+                get_filename_component(query_name ${query_file} NAME_WE)
+
+                file(READ ${query_file} QUERY_CONTENT)
+                string(LENGTH "${QUERY_CONTENT}" QUERY_SIZE)
+                math(EXPR TOTAL_QUERY_SIZE "${TOTAL_QUERY_SIZE} + ${QUERY_SIZE}")
+
+                string(MD5 QUERY_HASH "${QUERY_CONTENT}")
+                string(SUBSTRING ${QUERY_HASH} 0 8 DELIMITER)
+
+                set(VAR_NAME "${special_dir}_${query_name}_scm")
+
+                file(APPEND ${QUERY_REGISTRY_HEADER}
+                    "extern const char* ${VAR_NAME};\n")
+
+                file(APPEND ${QUERY_REGISTRY_SOURCE}
+                    "const char* ${VAR_NAME} = R\"${DELIMITER}(${QUERY_CONTENT})${DELIMITER}\";\n\n")
+
+                list(APPEND ALL_EMBEDDED_QUERIES "${special_dir}:${query_name}")
+
+                message(STATUS "      - ${query_name}.scm (${QUERY_SIZE} bytes)")
+            endforeach()
+        endif()
+    endforeach()
+
+    # Generate lookup functions
+    file(APPEND ${QUERY_REGISTRY_HEADER} "\n// Query lookup functions\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER}
+        "const char* getEmbeddedQuery(const std::string& lang, const std::string& query_type);\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER}
+        "bool hasEmbeddedQuery(const std::string& lang, const std::string& query_type);\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "\n} // namespace embedded_queries\n\n")
+    file(APPEND ${QUERY_REGISTRY_HEADER} "#endif // TREE_SITTER_ENABLED\n")
+
+    # Generate lookup function implementation
+    file(APPEND ${QUERY_REGISTRY_SOURCE}
+        "// Query lookup function\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE}
+        "const char* getEmbeddedQuery(const std::string& lang, const std::string& query_type) {\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE}
+        "    static const std::unordered_map<std::string, const char*> registry = {\n")
+
+    foreach(entry ${ALL_EMBEDDED_QUERIES})
+        string(REPLACE ":" ";" entry_parts ${entry})
+        list(GET entry_parts 0 lang)
+        list(GET entry_parts 1 query_type)
+        file(APPEND ${QUERY_REGISTRY_SOURCE}
+            "        {\"${lang}:${query_type}\", ${lang}_${query_type}_scm},\n")
+    endforeach()
+
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "    };\n\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "    auto key = lang + \":\" + query_type;\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "    auto it = registry.find(key);\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "    return (it != registry.end()) ? it->second : nullptr;\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "}\n\n")
+
+    file(APPEND ${QUERY_REGISTRY_SOURCE}
+        "bool hasEmbeddedQuery(const std::string& lang, const std::string& query_type) {\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE}
+        "    return getEmbeddedQuery(lang, query_type) != nullptr;\n")
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "}\n\n")
+
+    file(APPEND ${QUERY_REGISTRY_SOURCE} "} // namespace embedded_queries\n")
+
+    # NOW add the generated source to the existing arc target
+    target_sources(arc PRIVATE ${QUERY_REGISTRY_SOURCE})
+
+    # Make sure the generated directory is in the include path
+    target_include_directories(arc PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
+    # Calculate total size
+    math(EXPR TOTAL_QUERY_KB "${TOTAL_QUERY_SIZE} / 1024")
+    message(STATUS "=== Embedding languages.yaml Configuration ===")
+
+    set(LANGUAGES_YAML_PATH "${CMAKE_SOURCE_DIR}/runtime/languages.yaml")
+    set(EMBEDDED_CONFIG_HEADER "${CMAKE_BINARY_DIR}/generated/embedded_config.h")
+    set(EMBEDDED_CONFIG_SOURCE "${CMAKE_BINARY_DIR}/generated/embedded_config.cpp")
+
+    if(EXISTS ${LANGUAGES_YAML_PATH})
+        # Read the languages.yaml file
+        file(READ ${LANGUAGES_YAML_PATH} LANGUAGES_YAML_CONTENT)
+        string(LENGTH "${LANGUAGES_YAML_CONTENT}" YAML_SIZE)
+
+        # Create unique delimiter for raw string literal
+        string(MD5 YAML_HASH "${LANGUAGES_YAML_CONTENT}")
+        string(SUBSTRING ${YAML_HASH} 0 8 YAML_DELIMITER)
+
+        # Write header file
+        file(WRITE ${EMBEDDED_CONFIG_HEADER} "// Auto-generated by CMake - DO NOT EDIT\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "#pragma once\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "#ifdef TREE_SITTER_ENABLED\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "namespace embedded_config {\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "extern const char* languages_yaml;\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "bool hasEmbeddedConfig();\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "\n} // namespace embedded_config\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "#endif // TREE_SITTER_ENABLED\n")
+
+        # Write source file
+        file(WRITE ${EMBEDDED_CONFIG_SOURCE} "// Auto-generated by CMake - DO NOT EDIT\n")
+        file(APPEND ${EMBEDDED_CONFIG_SOURCE} "#include \"embedded_config.h\"\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_SOURCE} "namespace embedded_config {\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_SOURCE}
+            "const char* languages_yaml = R\"${YAML_DELIMITER}(${LANGUAGES_YAML_CONTENT})${YAML_DELIMITER}\";\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_SOURCE}
+            "bool hasEmbeddedConfig() {\n    return true;\n}\n\n")
+        file(APPEND ${EMBEDDED_CONFIG_SOURCE} "} // namespace embedded_config\n")
+
+        # Add to target sources
+        target_sources(arc PRIVATE ${EMBEDDED_CONFIG_SOURCE})
+
+        math(EXPR YAML_KB "${YAML_SIZE} / 1024")
+        message(STATUS "✅ Embedded languages.yaml (${YAML_KB} KB)")
+        message(STATUS "   Header: ${EMBEDDED_CONFIG_HEADER}")
+        message(STATUS "   Source: ${EMBEDDED_CONFIG_SOURCE}")
+    else()
+        message(WARNING "languages.yaml not found at ${LANGUAGES_YAML_PATH}")
+
+        # Create empty fallback
+        file(WRITE ${EMBEDDED_CONFIG_HEADER} "#pragma once\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "namespace embedded_config {\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "inline bool hasEmbeddedConfig() { return false; }\n")
+        file(APPEND ${EMBEDDED_CONFIG_HEADER} "}\n")
+    endif()
+
+    message(STATUS "=== End Configuration Embedding ===\n")
+
+    message(STATUS "")
+    message(STATUS "✅ Generated embedded query registry:")
+    message(STATUS "   Header: ${QUERY_REGISTRY_HEADER}")
+    message(STATUS "   Source: ${QUERY_REGISTRY_SOURCE}")
+    message(STATUS "   Total embedded queries: ${ALL_EMBEDDED_QUERIES}")
+    message(STATUS "   Total size: ~${TOTAL_QUERY_KB} KB")
+    message(STATUS "=== End Embedding ===")
+    message(STATUS "")
+endif()
 
 # Conditionally add Tree-sitter compile definition
 if(TREE_SITTER_ENABLED)
