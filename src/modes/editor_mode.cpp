@@ -1,7 +1,7 @@
 // src/modes/editor_mode.cpp
 #include "editor_mode.h"
 #include "src/core/application.h"
-#include "src/core/command_line.h"
+#include "src/core/args_parser.h"
 #include "src/core/config_manager.h"
 #include "src/core/editor.h"
 #include "src/core/editor_loop.h"
@@ -16,7 +16,7 @@
 #include <ncursesw/ncurses.h>
 #endif
 
-int EditorMode::run(const std::string &filename, const CommandLineArgs &args)
+int EditorMode::run(const std::string &filename, const ProgramArgs &args)
 {
   SyntaxMode syntax_mode = args.force_no_highlighting
                                ? SyntaxMode::NONE
@@ -71,6 +71,7 @@ int EditorMode::run(const std::string &filename, const CommandLineArgs &args)
 
   InputHandler inputHandler(editor);
   editor.setCursorMode();
+
   editor.display();
   wnoutrefresh(stdscr);
   doupdate();

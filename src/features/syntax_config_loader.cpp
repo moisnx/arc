@@ -1,10 +1,15 @@
 // src/features/syntax_config_loader.cpp
 #include "syntax_config_loader.h"
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <istream>
+#include <regex>
 #include <sstream>
+#include <string>
 #include <yaml-cpp/yaml.h>
 
 #ifdef TREE_SITTER_ENABLED
@@ -84,6 +89,37 @@ bool SyntaxConfigLoader::loadFromString(const std::string &yaml_content)
         }
       }
 
+      if (lang_node["aliases"] && lang_node["aliases"].IsSequence())
+      {
+        for (const auto &aliases_node : lang_node["aliases"])
+        {
+          std::string aliase = aliases_node.as<std::string>();
+          if (!aliase.empty())
+          {
+            config->aliases.push_back(aliase);
+          }
+        }
+      }
+
+      // FIXED: Process filenames BEFORE extensions
+      if (lang_node["filenames"] && lang_node["filenames"].IsSequence())
+      {
+        for (const auto &filenames_node : lang_node["filenames"])
+        {
+          std::string filename = filenames_node.as<std::string>();
+          if (!filename.empty())
+          {
+            config->filenames.push_back(filename);
+            // Register filename mapping (case-sensitive storage)
+            filename_to_language_[filename] = config->name;
+
+            // DEBUG: Print each filename being registered
+            // std::cerr << "Registered filename: '" << filename << "' -> '"
+            //           << config->name << "'" << std::endl;
+          }
+        }
+      }
+
       // Parse extensions
       if (lang_node["extensions"] && lang_node["extensions"].IsSequence())
       {
@@ -96,19 +132,6 @@ bool SyntaxConfigLoader::loadFromString(const std::string &yaml_content)
             extension_to_language_[ext] = config->name;
           }
         }
-
-        if (config->extensions.empty())
-        {
-          std::cerr << "WARNING: Language '" << lang_key
-                    << "' has no valid extensions, skipping" << std::endl;
-          continue;
-        }
-      }
-      else
-      {
-        std::cerr << "WARNING: Language '" << lang_key
-                  << "' has no extensions defined, skipping" << std::endl;
-        continue;
       }
 
       // Store configuration
@@ -117,7 +140,11 @@ bool SyntaxConfigLoader::loadFromString(const std::string &yaml_content)
     }
 
     // std::cerr << "Successfully loaded " << loaded_count
-    //           << " languages from YAML content" << std::endl;
+    //           << " languages from YAML" << std::endl;
+    // std::cerr << "Total filenames registered: " <<
+    // filename_to_language_.size()
+    //           << std::endl;
+
     return loaded_count > 0;
   }
   catch (const YAML::ParserException &e)
@@ -193,6 +220,24 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
         }
       }
 
+      // FIXED: Process filenames BEFORE extensions
+      if (lang_node["filenames"] && lang_node["filenames"].IsSequence())
+      {
+        for (const auto &filenames_node : lang_node["filenames"])
+        {
+          std::string filename = filenames_node.as<std::string>();
+          if (!filename.empty())
+          {
+            config->filenames.push_back(filename);
+            // Register filename mapping
+            filename_to_language_[filename] = config->name;
+
+            // std::cerr << "Registered filename: '" << filename << "' -> '"
+            //           << config->name << "'" << std::endl;
+          }
+        }
+      }
+
       if (lang_node["extensions"] && lang_node["extensions"].IsSequence())
       {
         for (const auto &ext_node : lang_node["extensions"])
@@ -204,25 +249,18 @@ bool SyntaxConfigLoader::parseRegistryFile(const std::string &filepath)
             extension_to_language_[ext] = config->name;
           }
         }
-
-        if (config->extensions.empty())
-        {
-          std::cerr << "WARNING: Language '" << lang_key
-                    << "' has no valid extensions, skipping" << std::endl;
-          continue;
-        }
-      }
-      else
-      {
-        std::cerr << "WARNING: Language '" << lang_key
-                  << "' has no extensions defined, skipping" << std::endl;
-        continue;
       }
 
       std::string stored_name = config->name;
       language_configs_[config->name] = std::move(config);
       loaded_count++;
     }
+
+    // std::cerr << "Successfully loaded " << loaded_count
+    //           << " languages from registry file" << std::endl;
+    // std::cerr << "Total filenames registered: " <<
+    // filename_to_language_.size()
+    //           << std::endl;
 
     return loaded_count > 0;
   }
@@ -282,6 +320,169 @@ SyntaxConfigLoader::getLanguageFromExtension(const std::string &extension) const
 {
   auto it = extension_to_language_.find(extension);
   return (it != extension_to_language_.end()) ? it->second : "text";
+}
+
+std::string
+SyntaxConfigLoader::getLanguageFromShebang(std::string firstline) const
+{
+
+  // Check for the shebang start
+  if (firstline.rfind("#!", 0) != 0)
+  {
+    return "text";
+  }
+
+  std::string path_and_args = firstline.substr(2); // Skip "#!"
+
+  // Trim leading whitespace
+  size_t start = path_and_args.find_first_not_of(" \t");
+  if (start == std::string::npos)
+  {
+    return "text";
+  }
+  path_and_args = path_and_args.substr(start);
+
+  // Find the first space to separate the interpreter path from its arguments
+  size_t space_pos = path_and_args.find_first_of(" \t");
+  std::string interpreter_path = path_and_args;
+  if (space_pos != std::string::npos)
+  {
+    interpreter_path = path_and_args.substr(0, space_pos);
+  }
+
+  std::string extracted_language_name;
+
+  // Handle the common case of #!/usr/bin/env <language>
+  // Check if the path ends with /env or /bin/env
+  if (interpreter_path.rfind("/env") == interpreter_path.length() - 4 ||
+      interpreter_path.rfind("/bin/env") == interpreter_path.length() - 8)
+  {
+    // If it's 'env', the language is the next argument (e.g., 'bash' in
+    // '#!/usr/bin/env bash')
+    size_t env_args_start = space_pos;
+    if (env_args_start != std::string::npos)
+    {
+      // Find the start of the next argument (skip spaces)
+      size_t lang_start =
+          path_and_args.find_first_not_of(" \t", env_args_start);
+      if (lang_start != std::string::npos)
+      {
+        // Find the end of the language name (first space after it)
+        size_t lang_end = path_and_args.find_first_of(" \t", lang_start);
+        extracted_language_name =
+            path_and_args.substr(lang_start, lang_end - lang_start);
+      }
+    }
+  }
+
+  // If not handled by 'env' or if 'env' argument was empty, extract from path
+  if (extracted_language_name.empty())
+  {
+    size_t last_slash = interpreter_path.find_last_of('/');
+    if (last_slash != std::string::npos)
+    {
+      extracted_language_name = interpreter_path.substr(last_slash + 1);
+    }
+    else
+    {
+      // If no slash, the whole path is the executable name
+      extracted_language_name = interpreter_path;
+    }
+  }
+
+  // Convert the extracted name (e.g., "bash") to lowercase for matching
+  if (!extracted_language_name.empty())
+  {
+    std::transform(extracted_language_name.begin(),
+                   extracted_language_name.end(),
+                   extracted_language_name.begin(), ::tolower);
+  }
+  else
+  {
+    return "text";
+  }
+
+  // Match the lowercase extracted name against the list of configured languages
+  std::string configured_name =
+      findConfiguredLanguageByAlias(extracted_language_name);
+
+  if (!configured_name.empty())
+  {
+    return configured_name; // Returns "Bash" or "Python"
+  }
+
+  // Fallback: if we couldn't match, return "text"
+  return "text";
+}
+
+std::string
+SyntaxConfigLoader::getLanguageFromFilename(const std::string &filepath) const
+{
+  // Extract just the filename from the full path
+  size_t last_slash = filepath.find_last_of("/\\");
+  std::string filename = (last_slash != std::string::npos)
+                             ? filepath.substr(last_slash + 1)
+                             : filepath;
+
+  // Direct filename match (case-insensitive on some systems)
+  auto it = filename_to_language_.find(filename);
+  if (it != filename_to_language_.end())
+  {
+    return it->second;
+  }
+
+  // Case-insensitive match for Windows
+  std::string lower_filename = filename;
+  std::transform(lower_filename.begin(), lower_filename.end(),
+                 lower_filename.begin(), ::tolower);
+
+  for (const auto &pair : filename_to_language_)
+  {
+    std::string lower_key = pair.first;
+    std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
+                   ::tolower);
+    if (lower_key == lower_filename)
+    {
+      return pair.second;
+    }
+  }
+
+  return "";
+}
+
+std::string SyntaxConfigLoader::findConfiguredLanguageByAlias(
+    const std::string &alias) const
+{
+  // The alias must be lowercase for comparison against the shebang-extracted
+  // name.
+  std::string lower_alias = alias;
+  std::transform(lower_alias.begin(), lower_alias.end(), lower_alias.begin(),
+                 ::tolower);
+
+  // Iterate through all loaded language configurations
+  for (const auto &pair : language_configs_)
+  {
+    // pair.first is the stored name (e.g., "Bash")
+    // pair.second->name is the display name (also "Bash" in many cases)
+
+    // 1. Check if the lowercase official name matches the alias
+    std::string lower_config_name = pair.first;
+    std::transform(lower_config_name.begin(), lower_config_name.end(),
+                   lower_config_name.begin(), ::tolower);
+
+    if (lower_config_name == lower_alias)
+    {
+      // Found a match (e.g., input 'bash' matches config 'Bash')
+      return pair.first; // Return the official, capitalized name ("Bash")
+    }
+
+    // could potentially extend this to check against a list of 'aliases' or
+    // 'filenames' if they were included in your LanguageConfig struct, but for
+    // now, matching the lowercase config key is the simplest approach.
+  }
+
+  // Not found
+  return "";
 }
 
 void SyntaxConfigLoader::debugCurrentState() const

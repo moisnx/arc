@@ -1,10 +1,10 @@
-// src/core/command_line.h
-#ifndef COMMAND_LINE_H
-#define COMMAND_LINE_H
+// src/core/args_parser.h
+#ifndef ARGS_PARSER_H
+#define ARGS_PARSER_H
 
 #include <string>
 
-struct CommandLineArgs
+struct ProgramArgs
 {
   std::string filename;
   bool force_no_highlighting = false;
@@ -13,7 +13,7 @@ struct CommandLineArgs
   bool bench_startup_nosyntax = false;
   bool is_directory = false;
 
-  static CommandLineArgs parse(int argc, char *argv[]);
+  static ProgramArgs parse(int argc, char *argv[]);
 };
 
-#endif // COMMAND_LINE_H
+#endif // ARGS_PARSER_H

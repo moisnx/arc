@@ -1,0 +1,156 @@
+[languages.html]
+name = "HTML"
+extensions = ["html"]
+parser_name = "html"
+queries = ["runtime/queries/html/highlights.scm"]
+
+[languages.css]
+name = "CSS"
+extensions = ["css"]
+parser_name = "css"
+queries = ["runtime/queries/css/highlights.scm"]
+
+[languages.c]
+name = "C"
+extensions = ["c", "h"]
+parser_name = "c"
+queries = ["runtime/queries/c/highlights.scm"]
+
+[languages.cpp]
+name = "C++"
+extensions = ["cpp", "cc", "cxx", "hpp", "hxx"]
+parser_name = "cpp"
+queries = ["runtime/queries/c/highlights.scm", "runtime/queries/cpp/highlights.scm"]
+
+[languages.python]
+name = "Python"
+extensions = ["py", "pyw", "pyi"]
+aliases = ["python", "python3", "pipenv"]
+parser_name = "python"
+queries = ["runtime/queries/python/highlights.scm"]
+
+[languages.rust]
+name = "Rust"
+extensions = ["rs"]
+parser_name = "rust"
+queries = ["runtime/queries/rust/highlights.scm"]
+
+[languages.markdown]
+name = "Markdown"
+extensions = ["md", "markdown", "mdown", "mkd"]
+builtin = true
+parser_name = "markdown"
+queries = ["runtime/queries/markdown/highlights.scm", "runtime/queries/markdown/injections.scm"]
+
+[languages.javascript]
+name = "JavaScript"
+extensions = ["js", "mjs", "jsx"]
+parser_name = "javascript"
+queries = ["runtime/queries/ecma/highlights.scm", "runtime/queries/_javascript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
+
+[languages.typescript]
+name = "TypeScript"
+extensions = ["ts"]
+parser_name = "typescript"
+queries = ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm"]
+
+[languages.tsx]
+name = "Tsx"
+extensions = ["tsx"]
+parser_name = "tsx"
+queries = ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
+
+[languages.zig]
+name = "Zig"
+extensions = ["zig", "zir", "zigr", "zon"]
+parser_name = "zig"
+queries = ["runtime/queries/zig/highlights.scm"]
+
+[languages.go]
+name = "Go"
+extensions = ["go"]
+parser_name = "go"
+queries = ["runtime/queries/go/highlights.scm"]
+
+[languages.ruby]
+name = "Ruby"
+extensions = ["rb"]
+aliases = ["ruby", "jruby"]
+parser_name = "ruby"
+queries = ["runtime/queries/ruby/highlights.scm"]
+
+[languages.bash]
+name = "Bash"
+extensions = ["sh", "bashrc", "zshrc"]
+aliases = ["bash", "sh", "zsh"]
+parser_name = "bash"
+queries = ["runtime/queries/bash/highlights.scm"]
+
+[languages.yaml]
+name = "Yaml"
+extensions = ["yaml", "yml"]
+parser_name = "yaml"
+queries = ["runtime/queries/yaml/highlights.scm"]
+
+[languages.toml]
+name = "Toml"
+extensions = ["toml"]
+parser_name = "toml"
+queries = ["runtime/queries/toml/highlights.scm"]
+
+[languages.json]
+name = "JSON"
+extensions = ["json"]
+parser_name = "json"
+queries = ["runtime/queries/json/highlights.scm"]
+
+[languages.lua]
+name = "Lua"
+extensions = ["lua"]
+parser_name = "lua"
+builtin = true
+queries = ["runtime/queries/lua/highlights.scm"]
+
+[languages.cmake]
+name = "CMake"
+extensions = ["cmake"]
+filenames = ["CMakeLists.txt", "CMakeCache.txt"]
+parser_name = "cmake"
+builtin = true
+queries = ["runtime/queries/cmake/highlights.scm"]
+
+[languages.make]
+name = "Make"
+extensions = ["make", "makefile"]
+filenames = ["Makefile", "makefile", "GNUmakefile", "BSDmakefile"]
+parser_name = "make"
+builtin = true
+queries = ["runtime/queries/make/highlights.scm"]
+
+# [languages.dockerfile]
+# name = "Dockerfile"
+# extensions = ["dockerfile"]
+# filenames = ["Dockerfile", "dockerfile"]
+# parser_name = "dockerfile"
+# queries = ["runtime/queries/dockerfile/highlights.scm"]
+
+# [languages.gitignore]
+# name = "Gitignore"
+# extensions = ["gitignore"]
+# filenames = [".gitignore", ".gitattributes", ".gitconfig"]
+# parser_name = "gitignore"
+# queries = ["runtime/queries/gitignore/highlights.scm"]
+
+# [languages.nginx]
+# name = "Nginx"
+# extensions = ["conf"]
+# filenames = ["nginx.conf", "nginx"]
+# parser_name = "nginx"
+# queries = ["runtime/queries/nginx/highlights.scm"]
+
+# [languages.properties]
+# name = "Properties"
+# extensions = ["properties", "gradle"]
+# filenames = ["gradle.properties", "build.properties", ".properties"]
+# parser_name = "properties"
+# queries = ["runtime/queries/properties/highlights.scm"]

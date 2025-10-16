@@ -31,7 +31,7 @@ parsers:
   
   css:
     path: tree-sitter-css
-    enabled: false
+    enabled: true
     description: "CSS stylesheets"
   
   javascript:
@@ -88,7 +88,7 @@ parsers:
   
   lua:
     path: tree-sitter-lua
-    enabled: false
+    enabled: true
     description: "Lua scripting language"
 
   # Shell/System
@@ -111,12 +111,12 @@ parsers:
   # Build Systems
   cmake:
     path: tree-sitter-cmake
-    enabled: false
+    enabled: true
     description: "CMake build scripts"
   
   make:
     path: tree-sitter-make
-    enabled: false
+    enabled: true
     description: "Makefile build scripts"
 
 # Future features (not yet implemented):

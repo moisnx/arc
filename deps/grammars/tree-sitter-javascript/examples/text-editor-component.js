@@ -9,6 +9,7 @@ const clipboard = require('./safe-clipboard')
 const electron = require('electron')
 const $ = etch.dom
 
+
 let TextEditorElement
 
 const DEFAULT_ROWS_PER_TILE = 6

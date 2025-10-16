@@ -1,0 +1,133 @@
+# Tree-sitter Grammar Manifest
+# This file declares which language parsers to build and include in Arc Editor
+#
+# To add a new language:
+# 1. Add git submodule: git submodule add <url> deps/grammars/tree-sitter-<lang>
+# 2. Add entry below with enabled: true
+# 3. Rebuild: cmake --build build
+
+[parsers]
+
+# System/Config Languages
+[parsers.yaml]
+path = "tree-sitter-yaml"
+enabled = true
+description = "YAML configuration files"
+
+[parsers.toml]
+path = "tree-sitter-toml"
+enabled = true
+description = "TOML configuration files"
+
+[parsers.json]
+path = "tree-sitter-json"
+enabled = true
+description = "JSON data files"
+
+# Web Languages
+[parsers.html]
+path = "tree-sitter-html"
+enabled = true
+description = "HTML markup"
+
+[parsers.css]
+path = "tree-sitter-css"
+enabled = true
+description = "CSS stylesheets"
+
+[parsers.javascript]
+path = "tree-sitter-javascript"
+enabled = true
+description = "JavaScript (ES6+)"
+
+[parsers.typescript]
+path = "tree-sitter-typescript/typescript"
+enabled = true
+description = "TypeScript"
+
+[parsers.tsx]
+path = "tree-sitter-typescript/tsx"
+enabled = true
+description = "TypeScript JSX (React)"
+
+# Systems Programming
+[parsers.c]
+path = "tree-sitter-c"
+enabled = true
+description = "C programming language"
+
+[parsers.cpp]
+path = "tree-sitter-cpp"
+enabled = true
+description = "C++ programming language"
+
+[parsers.rust]
+path = "tree-sitter-rust"
+enabled = true
+description = "Rust programming language"
+
+[parsers.zig]
+path = "tree-sitter-zig"
+enabled = true
+description = "Zig programming language"
+
+[parsers.go]
+path = "tree-sitter-go"
+enabled = true
+description = "Go programming language"
+
+# Scripting Languages
+[parsers.python]
+path = "tree-sitter-python"
+enabled = true
+description = "Python programming language"
+
+[parsers.ruby]
+path = "tree-sitter-ruby"
+enabled = true
+description = "Ruby programming language"
+
+[parsers.lua]
+path = "tree-sitter-lua"
+enabled = true
+description = "Lua scripting language"
+
+# Shell/System
+[parsers.bash]
+path = "tree-sitter-bash"
+enabled = true
+description = "Bash shell scripts"
+
+# Documentation
+[parsers.markdown]
+path = "tree-sitter-markdown/tree-sitter-markdown"
+enabled = true
+description = "Markdown documentation"
+
+[parsers.markdown_inline]
+path = "tree-sitter-markdown/tree-sitter-markdown-inline"
+enabled = true
+description = "Markdown inline formatting"
+
+# Build Systems
+[parsers.cmake]
+path = "tree-sitter-cmake"
+enabled = true
+description = "CMake build scripts"
+
+[parsers.make]
+path = "tree-sitter-make"
+enabled = true
+description = "Makefile build scripts"
+
+# Future features (not yet implemented):
+# 
+# [dependencies]
+# cpp = ["c"]
+# tsx = ["typescript", "javascript"]
+# 
+# [platform_constraints.objc]
+# platforms = ["macos", "ios"]
+# 
+# [version_requirements.python]
+# min_version = "0.20.0"

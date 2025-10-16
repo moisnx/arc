@@ -1,9 +1,13 @@
 #include "syntax_highlighter.h"
 #include "src/core/config_manager.h"
+#include "src/features/syntax_config_loader.h"
 #include "src/ui/style_manager.h"
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 #ifdef _WIN32
 #include <curses.h>
@@ -75,208 +79,105 @@ bool SyntaxHighlighter::initialize(const std::string &config_directory)
   return true;
 }
 
-// Replace the setLanguage() method in syntax_highlighter.cpp with this debug
-// version:
-
-void SyntaxHighlighter::setLanguage(const std::string &extension)
+void SyntaxHighlighter::setLanguage(const std::string &language_name)
 {
-  std::string language_name =
-      config_loader_->getLanguageFromExtension(extension);
-
+  // std::string language_name =
+  //     config_loader_->getLanguageFromExtension(extension);
   const LanguageConfig *config =
       config_loader_->getLanguageConfig(language_name);
 
-  if (config)
+  if (!config)
   {
-    current_language_config_ = config;
-    currentLanguage = language_name;
-
-#ifdef TREE_SITTER_ENABLED
-    if (!config->parser_name.empty() && parser_)
-    {
-      const TSLanguage *ts_language = getLanguageFunction(config->parser_name);
-      if (ts_language)
-      {
-        if (!ts_parser_set_language(parser_, ts_language))
-        {
-          std::cerr << "ERROR: Failed to set language for parser" << std::endl;
-          loadBasicRules();
-          return;
-        }
-        current_ts_language_ = ts_language;
-
-        // Clean up old query
-        if (current_ts_query_)
-        {
-          ts_query_delete(current_ts_query_);
-          current_ts_query_ = nullptr;
-        }
-
-        // DEBUG: Show what we're loading
-        // std::cerr << "\n=== QUERY LOADING DEBUG for " << config->parser_name
-        //           << " ===" << std::endl;
-
-        // CHANGED: Don't use getAvailableQueries - it might be getting stale
-        // data Instead, use the queries list from languages.yaml directly
-        std::string merged_query_source;
-
-        if (config->queries.empty())
-        {
-          std::cerr << "ERROR: No queries defined in languages.yaml for "
-                    << config->parser_name << std::endl;
-          loadBasicRules();
-          return;
-        }
-
-        // std::cerr << "Queries defined in languages.yaml: "
-        //           << config->queries.size() << std::endl;
-        // for (const auto &query_path : config->queries)
-        // {
-        //   std::cerr << "  - " << query_path << std::endl;
-        // }
-
-        // FIXED: Use loadQueriesFromPaths which handles:
-        // 1. Multiple query dependencies (C++ -> C + C++)
-        // 2. Proper fallback chain (dev -> user -> system -> embedded)
-        // std::cerr << "Loading queries from paths defined in
-        // languages.yaml..."
-        //           << std::endl;
-
-        // Enable verbose mode for debugging
-        QueryManager::setVerbose(true);
-
-        merged_query_source =
-            QueryManager::loadQueriesFromPaths(config->queries);
-
-        QueryManager::setVerbose(false);
-
-        // std::cerr << "\nTotal merged query size: "
-        //           << merged_query_source.length() << " bytes" << std::endl;
-        // std::cerr << "=== END QUERY LOADING DEBUG ===" << std::endl;
-
-        // Parse the merged query
-        if (!merged_query_source.empty())
-        {
-          uint32_t error_offset;
-          TSQueryError error_type;
-          current_ts_query_ = ts_query_new(
-              current_ts_language_, merged_query_source.c_str(),
-              merged_query_source.length(), &error_offset, &error_type);
-
-          if (!current_ts_query_)
-          {
-            std::cerr << "\n❌ ERROR: Failed to parse merged query for "
-                      << config->parser_name << std::endl;
-            std::cerr << "  Error offset: " << error_offset << std::endl;
-            std::cerr << "  Error type: " << error_type;
-
-            // Provide detailed error information
-            switch (error_type)
-            {
-            case TSQueryErrorNone:
-              std::cerr << " (None)";
-              break;
-            case TSQueryErrorSyntax:
-              std::cerr << " (Syntax Error)";
-              break;
-            case TSQueryErrorNodeType:
-              std::cerr << " (Unknown Node Type)";
-              break;
-            case TSQueryErrorField:
-              std::cerr << " (Unknown Field)";
-              break;
-            case TSQueryErrorCapture:
-              std::cerr << " (Unknown Capture)";
-              break;
-            case TSQueryErrorStructure:
-              std::cerr << " (Invalid Structure)";
-              break;
-            default:
-              std::cerr << " (Unknown Error)";
-              break;
-            }
-            std::cerr << std::endl;
-
-            // Show context around error
-            if (error_offset < merged_query_source.length())
-            {
-              int context_start = std::max(0, (int)error_offset - 100);
-              int context_end = std::min((int)merged_query_source.length(),
-                                         (int)error_offset + 100);
-
-              std::cerr << "\nContext around error:" << std::endl;
-              std::cerr << "..."
-                        << merged_query_source.substr(
-                               context_start, context_end - context_start)
-                        << "..." << std::endl;
-
-              // Point to error location
-              std::cerr << std::string(error_offset - context_start + 3, ' ')
-                        << "^" << std::endl;
-            }
-
-            // Fall back to basic highlighting
-            std::cerr << "Falling back to basic highlighting" << std::endl;
-            loadBasicRules();
-          }
-          else
-          {
-            // Check how many captures we got
-            // uint32_t pattern_count =
-            // ts_query_pattern_count(current_ts_query_); uint32_t capture_count
-            // = ts_query_capture_count(current_ts_query_);
-
-            // std::cerr << "\n✅ Successfully loaded Tree-sitter query for "
-            //           << config->parser_name << std::endl;
-            // std::cerr << "   Patterns: " << pattern_count << std::endl;
-            // std::cerr << "   Captures: " << capture_count << std::endl;
-
-            // List first 10 capture names
-            // std::cerr << "   Sample captures: ";
-            // for (uint32_t i = 0; i < std::min(10u, capture_count); ++i)
-            // {
-            //   uint32_t len;
-            //   const char *name =
-            //       ts_query_capture_name_for_id(current_ts_query_, i, &len);
-            //   std::cerr << std::string(name, len) << " ";
-            // }
-            std::cerr << std::endl;
-          }
-        }
-        else
-        {
-          std::cerr << "WARNING: No query content loaded for "
-                    << config->parser_name << std::endl;
-          loadBasicRules();
-        }
-      }
-      else
-      {
-        std::cerr << "ERROR: No Tree-sitter language function found for: "
-                  << config->parser_name << std::endl;
-        loadBasicRules();
-      }
-    }
-    else
-    {
-      std::cerr << "Tree-sitter not available or no parser specified, using "
-                   "basic highlighting"
-                << std::endl;
-      loadBasicRules();
-    }
-#else
-    std::cerr << "Tree-sitter disabled, using basic highlighting" << std::endl;
-    loadBasicRules();
-#endif
-  }
-  else
-  {
-    std::cerr << "ERROR: No config found for language: " << language_name
-              << std::endl;
     loadBasicRules();
     currentLanguage = "text";
     current_language_config_ = nullptr;
+    return;
   }
+
+  current_language_config_ = config;
+  currentLanguage = language_name;
+
+#ifdef TREE_SITTER_ENABLED
+  if (config->parser_name.empty() || !parser_)
+  {
+    loadBasicRules();
+    return;
+  }
+
+  const TSLanguage *ts_language = getLanguageFunction(config->parser_name);
+  if (!ts_language)
+  {
+    std::cerr << "Error: No Tree-sitter language for: " << config->parser_name
+              << std::endl;
+    loadBasicRules();
+    return;
+  }
+
+  if (!ts_parser_set_language(parser_, ts_language))
+  {
+    std::cerr << "Error: Failed to set language" << std::endl;
+    loadBasicRules();
+    return;
+  }
+
+  current_ts_language_ = ts_language;
+
+  // Clean up
+  if (current_ts_query_)
+  {
+    ts_query_delete(current_ts_query_);
+    current_ts_query_ = nullptr;
+  }
+  queries_loaded_.store(false);
+
+  if (config->queries.empty())
+  {
+    std::cerr << "Warning: No queries for " << config->parser_name << std::endl;
+    queries_loaded_.store(true);
+    return;
+  }
+  const TSLanguage *lang_ptr = current_ts_language_;
+  QueryManager::loadQueriesFromPathAsync(
+      config->queries,
+      [this, lang_ptr](const std::string &merged_query)
+      {
+        if (merged_query.empty())
+        {
+          std::cerr << "Warning: Empty merged query" << std::endl;
+          queries_loaded_.store(true);
+          return;
+        }
+        uint32_t error_offset;
+        TSQueryError error_type;
+        TSQuery *new_query =
+            ts_query_new(lang_ptr, merged_query.c_str(), merged_query.length(),
+
+                         &error_offset, &error_type);
+        if (!new_query)
+        {
+          std::cerr << "Error: Query parsed failed at offset " << error_offset
+                    << std::endl;
+          queries_loaded_.store(true);
+          return;
+        }
+        // Atomically install the new query
+        {
+          std::lock_guard<std::mutex> lock(tree_mutex_);
+          if (current_ts_query_)
+          {
+            ts_query_delete(current_ts_query_);
+          }
+          current_ts_query_ = new_query;
+        }
+        queries_loaded_.store(true);
+
+        clearLineCache();
+
+        needs_redraw_.store(true, std::memory_order_release);
+      });
+#else
+  loadBasicRules();
+#endif
 }
 
 std::vector<ColorSpan>
@@ -288,6 +189,11 @@ SyntaxHighlighter::getHighlightSpans(const std::string &line, int lineIndex,
   if (cache_it != line_cache_.end())
   {
     return cache_it->second;
+  }
+
+  if (!queries_loaded_.load(std::memory_order_acquire))
+  {
+    return {};
   }
 
   // Handle Markdown special states
@@ -889,6 +795,7 @@ int SyntaxHighlighter::getColorPairForCapture(
       {"keyword.repeat", "KEYWORD"},
       {"keyword.import", "KEYWORD"},
       {"keyword.exception", "KEYWORD"},
+      {"keyword.bracket", "KEYWORD"},
 
       // Types
       {"type", "TYPE"},
@@ -1367,4 +1274,145 @@ void SyntaxHighlighter::clearAllCache()
 
   // Mark that we need a full reparse
   is_full_parse_ = false;
+}
+
+void SyntaxHighlighter::updateLineHighlighting(const GapBuffer &buffer,
+                                               int lineIndex)
+{
+#ifdef TREE_SITTER_ENABLED
+  if (!current_ts_query_ || !tree_)
+  {
+    return; // Fall back to cached/basic highlighting
+  }
+
+  // Get the line text
+  std::string line = buffer.getLine(lineIndex);
+
+  // Quick hash check - skip if line unchanged
+  size_t line_hash = std::hash<std::string>{}(line);
+  if (line_cache_.count(lineIndex))
+  {
+    // Check if we have a hash stored
+    static std::unordered_map<int, size_t> line_hashes;
+    if (line_hashes[lineIndex] == line_hash)
+    {
+      return; // Line unchanged, cache is valid
+    }
+    line_hashes[lineIndex] = line_hash;
+  }
+
+  // FAST PATH: Query just this line (1-2ms)
+  // This is synchronous but fast enough to be imperceptible
+  try
+  {
+    std::lock_guard<std::mutex> lock(tree_mutex_);
+
+    std::vector<ColorSpan> spans = executeTreeSitterQuery(line, lineIndex);
+
+    // Update cache immediately
+    line_cache_[lineIndex] = spans;
+  }
+  catch (const std::exception &e)
+  {
+    // Fall back to basic highlighting on error
+    std::cerr << "Line highlight error on line " << lineIndex << ": "
+              << e.what() << std::endl;
+  }
+#endif
+}
+
+void SyntaxHighlighter::scheduleIncrementalParse(const GapBuffer &buffer,
+                                                 int editLine)
+{
+#ifdef TREE_SITTER_ENABLED
+  if (!parser_ || !tree_)
+  {
+    return;
+  }
+
+  // Update last edit time
+  last_edit_time_ = std::chrono::steady_clock::now();
+
+  // If parse already scheduled, let it handle this edit
+  if (parse_scheduled_.exchange(true))
+  {
+    return; // Already scheduled, will catch this edit
+  }
+
+  // Launch debounced background parse
+  std::thread(
+      [this, buffer, editLine]()
+      {
+        // Wait for typing pause
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(REPARSE_DELAY_MS));
+
+        // Check if more edits happened while waiting
+        auto elapsed = std::chrono::steady_clock::now() - last_edit_time_;
+        if (elapsed < std::chrono::milliseconds(REPARSE_DELAY_MS))
+        {
+          parse_scheduled_.store(false);
+          return; // User still typing, skip this parse
+        }
+
+        // User paused - safe to do full incremental parse
+        try
+        {
+          std::lock_guard<std::mutex> lock(tree_mutex_);
+
+          if (!tree_ || !parser_)
+          {
+            parse_scheduled_.store(false);
+            return;
+          }
+
+          // Get full buffer text
+          std::string full_text = buffer.getText();
+
+          // INCREMENTAL PARSE: Tree-sitter only reparses changed regions
+          // This is fast even for 100k line files (~5-20ms)
+          TSTree *new_tree =
+              ts_parser_parse_string(parser_,
+                                     tree_, // Old tree for incremental parsing
+                                     full_text.c_str(), full_text.length());
+
+          if (new_tree)
+          {
+            // Swap trees atomically
+            ts_tree_delete(tree_);
+            tree_ = new_tree;
+
+            // Invalidate cache for affected region
+            // Tree-sitter changed ranges tell us exactly what changed
+            TSRange *ranges;
+            uint32_t range_count;
+            ranges = ts_tree_get_changed_ranges(tree_, tree_, &range_count);
+
+            for (uint32_t i = 0; i < range_count; i++)
+            {
+              uint32_t start_line = ranges[i].start_point.row;
+              uint32_t end_line = ranges[i].end_point.row;
+
+              // Invalidate changed lines
+              for (uint32_t line = start_line; line <= end_line; line++)
+              {
+                line_cache_.erase(line);
+              }
+            }
+
+            free(ranges);
+
+            // Signal UI thread to redraw
+            needs_redraw_.store(true);
+          }
+        }
+        catch (const std::exception &e)
+        {
+          std::cerr << "Background parse error: " << e.what() << std::endl;
+        }
+
+        parse_scheduled_.store(false);
+      })
+      .detach();
+#endif
 }

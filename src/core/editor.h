@@ -1,6 +1,8 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
+#include "src/features/indent_manager.h"
+#include <memory>
 #include <stack>
 #include <string>
 
@@ -53,7 +55,10 @@ public:
 
   // Core API
   Editor(SyntaxHighlighter *highlighter);
+  // SyntaxHighlighter highlighter;
   void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
+
+  SyntaxHighlighter *getSyntaxHighlighter() { return syntaxHighlighter; }
   bool loadFile(const std::string &fname);
   bool saveFile();
   void display();
@@ -63,6 +68,14 @@ public:
 
   std::string getFilename() const { return filename; }
   std::string getFirstLine() const { return buffer.getLine(0); }
+
+  bool setFileLang(std::string language)
+  {
+    filelang = language;
+    return true;
+  }
+  std::string getFileLang() const { return filelang; }
+
   GapBuffer getBuffer() { return buffer; }
 
   // Movement
@@ -142,12 +155,27 @@ public:
   size_t getUndoMemoryUsage() const;
   size_t getRedoMemoryUsage() const;
 
+  // Indentation
+  void insertTextAtCursor(const std::string &text);
+  int removePreviousIndent(int amount);
+
+  void forceSyntaxResync();
+
+  bool isSyntaxHihglightingReady() const
+  {
+    return syntaxHighlighter ? syntaxHighlighter->isReady() : false;
+  }
+  bool getIsBinary() const { return isBinaryFile; }
+  void displayBinaryWarning();
+
 private:
   // Core data
   GapBuffer buffer;
   std::string filename;
   SyntaxHighlighter *syntaxHighlighter;
+  std::unique_ptr<IndentManager> indentManager_;
   bool isSaving = false;
+  std::unique_ptr<SyntaxConfigLoader> config_loader_;
 
   // Delta
   bool useDeltaUndo_ = false; // Feature flag - start disabled!
@@ -173,6 +201,9 @@ private:
   int cursorLine = 0;
   int cursorCol = 0;
 
+  std::string filelang = "text";
+
+  bool isPasting_ = false;
   // Clipboard
   std::string clipboard;
 
@@ -207,6 +238,17 @@ private:
 
   // Cursor Style
   CursorMode currentMode = NORMAL;
+
+  void autoIndentCurrentLine();
+  void adjustIndentForClosingBracket();
+  void adjustIndentForPythonDedent(); // NEW: Python-specific
+  bool isLineOnlyWhitespace(const std::string &line);
+  std::string getIndentString(int spaces);
+  int countIndentSpaces(const std::string &line);
+  void pasteWithSmartIndent(const std::string &text);
+  bool shouldTriggerDedent(char ch); // NEW: Language-aware dedent triggers
+
+  bool isBinaryFile = false;
 };
 
 #endif // EDITOR_H

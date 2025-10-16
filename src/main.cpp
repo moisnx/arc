@@ -1,8 +1,10 @@
 #include "src/benchmark/benchmark.h"
 #include "src/core/application.h"
-#include "src/core/command_line.h"
+#include "src/core/args_parser.h"
 #include "src/core/config_manager.h"
+// #include "src/core/logger.h"
 #include "src/core/signals/signal_handler.h"
+#include "src/features/query_manager.h"
 #include "src/modes/browser_mode.h"
 #include "src/modes/editor_mode.h"
 #include <iostream>
@@ -12,9 +14,10 @@ int main(int argc, char *argv[])
 {
   install_signal_handlers();
 
+  // std::cerr.flush();
   try
   {
-    CommandLineArgs args = CommandLineArgs::parse(argc, argv);
+    ProgramArgs args = ProgramArgs::parse(argc, argv);
     setlocale(LC_ALL, "");
 
     if (!ConfigManager::ensureConfigStructure())
@@ -23,6 +26,12 @@ int main(int argc, char *argv[])
     }
     ConfigManager::copyProjectFilesToConfig();
     ConfigManager::loadConfig();
+
+    if (!args.bench_startup && !args.bench_startup_nosyntax)
+    {
+      QueryManager::warmupCache(
+          {"c", "cpp", "python", "rust", "go", "javascript"});
+    }
 
     if (args.bench_startup || args.bench_startup_nosyntax)
     {

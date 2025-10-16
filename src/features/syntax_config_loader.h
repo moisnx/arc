@@ -11,14 +11,8 @@ struct LanguageConfig
 {
   std::string name;
   std::vector<std::string> extensions;
-  std::vector<std::string> keywords;
-  std::vector<std::string> types;
-  std::vector<std::string> builtin_functions;
-  std::vector<std::string> operators;
-  std::string comment_start;
-  std::string comment_end;
-  std::string string_delimiters;
-  std::string number_pattern;
+  std::vector<std::string> aliases;
+  std::vector<std::string> filenames;
   std::string parser_name;
   std::string query_file_path;
   std::vector<std::string> queries;
@@ -43,13 +37,17 @@ public:
   const LanguageConfig *
   getLanguageConfig(const std::string &language_name) const;
   std::string getLanguageFromExtension(const std::string &extension) const;
-
+  std::string getLanguageFromShebang(std::string firstline) const;
   // Debug
   void debugCurrentState() const;
 
   // Public for reload callback access
   std::map<std::string, std::unique_ptr<LanguageConfig>> language_configs_;
   std::unordered_map<std::string, std::string> extension_to_language_;
+  std::string findConfiguredLanguageByAlias(const std::string &alias) const;
+
+  std::unordered_map<std::string, std::string> filename_to_language_;
+  std::string getLanguageFromFilename(const std::string &filename) const;
 
 private:
   bool parseYamlFile(const std::string &filepath, LanguageConfig &config);

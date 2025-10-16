@@ -3,10 +3,12 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #ifdef TREE_SITTER_ENABLED
@@ -55,6 +57,37 @@ public:
 
     // Use standard resolution (embedded-first)
     return getQuery(lang, query_type);
+  }
+
+  static void
+  loadQueriesFromPathAsync(const std::vector<std::string> &query_paths,
+                           std::function<void(const std::string &)> callback)
+  {
+    std::thread(
+        [query_paths, callback]()
+        {
+          std::string merged = loadQueriesFromPaths(query_paths);
+
+          if (callback)
+          {
+            callback(merged);
+          }
+        })
+        .detach();
+  }
+
+  static void warmupCache(const std::vector<std::string> &languages)
+  {
+#ifdef TREE_SITTER_ENABLED
+    for (const auto &lang : languages)
+    {
+      std::vector<std::string> types = {"highlights", "indents", "injections"};
+      for (const auto &type : types)
+      {
+        embedded_queries::hasEmbeddedQuery(lang, type);
+      }
+    }
+#endif
   }
 
   /**

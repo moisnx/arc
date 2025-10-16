@@ -6,6 +6,7 @@
 #include "src/features/markdown_state.h"
 #include "src/ui/style_manager.h"
 #include "syntax_config_loader.h"
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #ifdef TREE_SITTER_ENABLED
+#include "indent_manager.h"
 #include <tree_sitter/api.h>
 #endif
 
@@ -36,12 +38,18 @@ public:
 
   // Initialize with config directory path
   bool initialize(const std::string &config_directory = "treesitter/");
+  bool hasValidTree() const { return tree_ != nullptr; }
+  TSTree *getTree() const { return tree_; }
+
   void setSyntaxMode(SyntaxMode mode) { syntax_mode_ = mode; }
+  void linkIndentManager(IndentManager *mgr) { indent_mgr_ = mgr; }
+
   int viewport_start_line_ = 0;
   bool is_full_parse_ = true;
 
   // Core functionality
-  void setLanguage(const std::string &extension);
+  void getExtension(const std::string &filename);
+  void setLanguage(const std::string &language_name);
   std::vector<ColorSpan> getHighlightSpans(const std::string &line, int lineNum,
                                            const GapBuffer &buffer) const;
 
@@ -89,12 +97,57 @@ public:
   void setEditing(bool editing) { is_editing_ = editing; }
   bool isEditing() const { return is_editing_; }
 
+  // Queries
+  bool areQueriesLoaded() const
+  {
+    return queries_loaded_.load(std::memory_order_acquire);
+  }
+
+  bool isReady() const
+  {
+    return queries_loaded_.load(std::memory_order_acquire);
+  }
+
+  void clearLineCache()
+  {
+    std::lock_guard<std::mutex> lock(tree_mutex_);
+    line_cache_.clear();
+  }
+
+  bool needsRedraw()
+  {
+    return needs_redraw_.exchange(false, std::memory_order_acq_rel);
+  }
+  void updateLineHighlighting(const GapBuffer &buffer, int lineIndex);
+
+  // Schedule smart incremental parse (async, debounced)
+  void scheduleIncrementalParse(const GapBuffer &buffer, int editLine);
+
+  // Track viewport for priority parsing
+  void setViewport(int top, int height)
+  {
+    current_viewport_top_ = top;
+    current_viewport_height_ = height;
+  }
+
+  // Quick check if line is in viewport
+  bool isLineInViewport(int line) const
+  {
+    return line >= current_viewport_top_ &&
+           line < current_viewport_top_ + current_viewport_height_;
+  }
+
 private:
   // Configuration management
   std::unique_ptr<SyntaxConfigLoader> config_loader_;
   const LanguageConfig *current_language_config_;
   std::string currentLanguage;
   SyntaxMode syntax_mode_ = SyntaxMode::VIEWPORT;
+
+  IndentManager *indent_mgr_ = nullptr;
+
+  std::atomic<bool> queries_loaded_{false};
+
   mutable bool tree_initialized_ = false;
   bool parse_pending_ = true;
   std::thread parse_thread_;
@@ -191,4 +244,12 @@ private:
   std::vector<ColorSpan>
   executeTreeSitterQueryForRegion(int startLine, int endLine,
                                   const GapBuffer &buffer) const;
+
+  std::atomic<bool> needs_redraw_{false};
+  std::chrono::steady_clock::time_point last_edit_time_;
+  std::atomic<bool> parse_scheduled_{false};
+  static constexpr int REPARSE_DELAY_MS = 50; // Wait 50ms after last keystroke
+
+  int current_viewport_top_ = 0;
+  int current_viewport_height_ = 0;
 };

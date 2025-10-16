@@ -6,9 +6,6 @@
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
-#include <string.h>
-
-
 
 #ifdef _MSC_VER
 #pragma optimize("", off)

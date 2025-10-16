@@ -4,12 +4,12 @@
 
 #include <string>
 
-struct CommandLineArgs;
+struct ProgramArgs;
 
 class EditorMode
 {
 public:
-  static int run(const std::string &filename, const CommandLineArgs &args);
+  static int run(const std::string &filename, const ProgramArgs &args);
 };
 
 #endif // EDITOR_MODE_H

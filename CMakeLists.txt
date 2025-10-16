@@ -284,6 +284,8 @@ list(APPEND EFSW_SOURCES
     ${EFSW_BASE_DIR}/src/efsw/WatcherGeneric.cpp
 )
 
+
+
 # Conditionally add the correct platform backend
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     list(APPEND EFSW_SOURCES
@@ -453,7 +455,7 @@ set(SOURCES
     src/main.cpp
     src/core/application.cpp
     src/core/editor_loop.cpp
-    src/core/command_line.cpp
+    src/core/args_parser.cpp
     src/core/clipboard.cpp
     src/core/editor.cpp
     src/core/buffer.cpp

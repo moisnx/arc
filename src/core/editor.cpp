@@ -2,12 +2,14 @@
 // #include "src/ui/colors.h"
 #include "src/core/clipboard.h"
 #include "src/core/config_manager.h"
+// #include "src/core/logger.h"
+#include "src/features/indent_manager.h"
 #include "src/ui/style_manager.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iostream>
+#include <memory>
 #ifdef _WIN32
 #include <curses.h>
 #include <windows.h>
@@ -16,6 +18,7 @@
 #else
 #include <ncursesw/ncurses.h>
 #endif
+#include "src/utils/binary_detector.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -36,8 +39,19 @@
 // Clipboard::Clipboard();
 
 Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
+
 {
   tabSize = ConfigManager::getTabSize();
+
+#ifdef TREE_SITTER_ENABLED
+  config_loader_ = std::make_unique<SyntaxConfigLoader>();
+  indentManager_ = std::make_unique<IndentManager>();
+  indentManager_->setTabSize(tabSize);
+  // indentManager_->setDebugMode(true);
+  std::string syntax_dir = ConfigManager::getSyntaxRulesDir();
+
+  config_loader_->loadAllLanguageConfigs(syntax_dir);
+#endif
 }
 
 EditorSnapshot Editor::captureSnapshot() const
@@ -339,8 +353,125 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
+void Editor::displayBinaryWarning()
+{
+  int rows, cols;
+  getmaxyx(stdscr, rows, cols);
+
+  // Clear with background
+  attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+  clear();
+
+  int centerRow = rows / 2 - 4;
+  int centerCol = cols / 2;
+
+  // Modern card-style warning with gradient effect
+
+  // Top border with ERROR color
+  attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+  mvprintw(centerRow, centerCol - 25,
+           "╔═════════════════════════════════════════════════╗");
+  mvprintw(centerRow + 1, centerCol - 25, "║");
+  mvprintw(centerRow + 1, centerCol + 24, "║");
+  attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+  // Icon and title with WARNING color
+  attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+  mvprintw(centerRow + 1, centerCol - 10, "⚠️  BINARY FILE  ⚠️");
+  attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+  // Separator
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 2, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  // Main message with PRIMARY color
+  attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+  mvprintw(centerRow + 4, centerCol - 22,
+           "This file contains binary data that cannot");
+  mvprintw(centerRow + 5, centerCol - 22,
+           "be safely displayed or edited as text.");
+  attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+  // File info section
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 7, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  // Filename with ACCENT color
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 8, centerCol - 22, "File:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+  // Truncate long filenames
+  std::string displayName = filename;
+  if (displayName.length() > 40)
+  {
+    displayName = "..." + displayName.substr(displayName.length() - 37);
+  }
+  mvprintw(centerRow + 8, centerCol - 16, "%s", displayName.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+
+  // File type and size detection
+  std::string fileType = BinaryDetector::detectFileType(filename);
+  std::string fileSize = BinaryDetector::getFileSize(filename);
+
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 9, centerCol - 22, "Type:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_INFO));
+  mvprintw(centerRow + 9, centerCol - 16, "%s", fileType.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+  // Show file size
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 10, centerCol - 22, "Size:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_INFO));
+  mvprintw(centerRow + 10, centerCol - 16, "%s", fileSize.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+  // Help text with DISABLED state color
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 12, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  attron(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+  mvprintw(centerRow + 13, centerCol - 22,
+           "To edit this file, use a hex editor or");
+  mvprintw(centerRow + 14, centerCol - 22, "appropriate binary editing tool.");
+  attroff(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+  // Bottom border with ERROR color
+  attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+  mvprintw(centerRow + 15, centerCol - 25,
+           "╚═════════════════════════════════════════════════╝");
+  attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+  // Action hint at bottom with SUCCESS color
+  attron(COLOR_PAIR(ColorPairs::UI_SUCCESS));
+  mvprintw(rows - 3, centerCol - 15, "Press any key to continue...");
+  attroff(COLOR_PAIR(ColorPairs::UI_SUCCESS));
+
+  drawStatusBar();
+
+  wnoutrefresh(stdscr);
+  doupdate();
+}
+
 void Editor::display()
 {
+  if (isBinaryFile)
+  {
+    displayBinaryWarning();
+    return;
+  }
   // Validate state
   if (!validateEditorState())
   {
@@ -1180,11 +1311,17 @@ bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
 
-  if (syntaxHighlighter)
+  // CHECK FOR BINARY FILE FIRST
+  if (BinaryDetector::shouldTreatAsBinary(filename))
   {
-    std::string extension = getFileExtension();
-    syntaxHighlighter->setLanguage(extension);
+    isBinaryFile = true;
+    buffer.clear();
+    buffer.insertLine(0, ""); // Keep buffer valid
+    isModified = false;
+    return true; // Success, but it's binary
   }
+
+  isBinaryFile = false;
 
   if (!buffer.loadFromFile(filename))
   {
@@ -1193,12 +1330,53 @@ bool Editor::loadFile(const std::string &fname)
     return false;
   }
 
-  // Set language but DON'T parse yet - parsing happens on first display
+  if (syntaxHighlighter)
+  {
+    std::string language_name = "text"; // Default fallback
+
+    // PRIORITY 1: Try file extension first
+    std::string extension = getFileExtension();
+    if (!extension.empty())
+    {
+      language_name = config_loader_->getLanguageFromExtension(extension);
+      // If extension detection succeeded (not "text"), we're done
+      if (!language_name.empty() && language_name != "text")
+      {
+        syntaxHighlighter->setLanguage(language_name);
+        isModified = false;
+        return true;
+      }
+    }
+
+    // PRIORITY 2: Try filename matching (if extension failed or was generic)
+    // This handles cases like "CMakeLists.txt", "Makefile", ".gitignore"
+    std::string from_filename =
+        config_loader_->getLanguageFromFilename(filename);
+    if (!from_filename.empty() && from_filename != "text")
+    {
+      language_name = from_filename;
+      syntaxHighlighter->setLanguage(language_name);
+      isModified = false;
+      return true;
+    }
+
+    // PRIORITY 3: Try shebang line (for scripts without extensions)
+    // This handles cases like "#!/bin/bash" or "#!/usr/bin/env python"
+    language_name = config_loader_->getLanguageFromShebang(getFirstLine());
+    if (!language_name.empty() && language_name != "text")
+    {
+      syntaxHighlighter->setLanguage(language_name);
+      isModified = false;
+      return true;
+    }
+
+    // FALLBACK: No specific language detected, use "text"
+    syntaxHighlighter->setLanguage("text");
+  }
 
   isModified = false;
   return true;
 }
-
 bool Editor::saveFile()
 {
   if (filename.empty())
@@ -1225,6 +1403,9 @@ bool Editor::saveFile()
 
 void Editor::insertChar(char ch)
 {
+  if (isBinaryFile)
+    return;
+
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
     return;
 
@@ -1331,32 +1512,57 @@ void Editor::insertChar(char ch)
 
 void Editor::insertNewline()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForNewline();
-
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-    // 1. MODIFY BUFFER FIRST
+    // 1. Split the line at cursor
     splitLineAtCursor();
     cursorLine++;
-    cursorCol = 0;
+    cursorCol = 0; // Reset column first
 
-    // 2. THEN notify Tree-sitter AFTER buffer change
+    // 2. Calculate and apply auto-indent AFTER line split
+#ifdef TREE_SITTER_ENABLED
+    int indent_spaces = 0;
+    // ONLY auto-indent if NOT pasting
+    if (!isPasting_ && indentManager_ && syntaxHighlighter &&
+        syntaxHighlighter->hasValidTree())
+    {
+      // Calculate indent for the NEW line (cursorLine) based on PREVIOUS line
+      indent_spaces = indentManager_->calculateIndentAfterLine(
+          cursorLine - 1, buffer, syntaxHighlighter->getTree());
+
+      if (indent_spaces > 0)
+      {
+        std::string line = buffer.getLine(cursorLine);
+        std::string indent_str(indent_spaces, ' ');
+        line = indent_str + line;
+        buffer.replaceLine(cursorLine, line);
+        cursorCol = indent_spaces;
+      }
+    }
+#endif
+
+    // 3. Update Tree-sitter AFTER buffer modification
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(
-          buffer, byte_pos, 0, 1,                  // Inserted 1 byte (newline)
-          delta.preCursorLine, delta.preCursorCol, // OLD position
-          delta.preCursorLine, delta.preCursorCol, cursorLine,
-          0); // NEW position
+      // Calculate new byte count (newline char + any indent)
+      int bytes_inserted = 1 + cursorCol;
 
-      // Invalidate from split point onwards
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, bytes_inserted, delta.preCursorLine,
+          delta.preCursorCol, delta.preCursorLine, delta.preCursorCol,
+          cursorLine, cursorCol);
+
       syntaxHighlighter->invalidateLineRange(cursorLine - 1,
                                              buffer.getLineCount() - 1);
     }
 
+    // 4. Adjust viewport if needed
     if (cursorLine >= viewportTop + viewportHeight)
     {
       viewportTop = cursorLine - viewportHeight + 1;
@@ -1373,7 +1579,6 @@ void Editor::insertNewline()
     if (valid)
     {
       addDelta(delta);
-      // Newlines always commit the current group
       commitDeltaGroup();
       beginDeltaGroup();
     }
@@ -1387,20 +1592,39 @@ void Editor::insertNewline()
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
+    // Full-state undo path
     saveState();
-
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
     splitLineAtCursor();
     cursorLine++;
     cursorCol = 0;
 
+#ifdef TREE_SITTER_ENABLED
+    int indent_spaces = 0;
+    if (indentManager_ && syntaxHighlighter &&
+        syntaxHighlighter->hasValidTree())
+    {
+      indent_spaces = indentManager_->calculateIndentAfterLine(
+          cursorLine - 1, buffer, syntaxHighlighter->getTree());
+
+      if (indent_spaces > 0)
+      {
+        std::string line = buffer.getLine(cursorLine);
+        std::string indent_str(indent_spaces, ' ');
+        line = indent_str + line;
+        buffer.replaceLine(cursorLine, line);
+        cursorCol = indent_spaces;
+      }
+    }
+#endif
+
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1,
-                                             cursorLine - 1, 0, cursorLine - 1,
-                                             0, cursorLine, 0);
+      int bytes_inserted = 1 + cursorCol;
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, bytes_inserted, cursorLine - 1, 0,
+          cursorLine - 1, 0, cursorLine, cursorCol);
       syntaxHighlighter->invalidateLineRange(cursorLine - 1,
                                              buffer.getLineCount() - 1);
     }
@@ -1416,6 +1640,9 @@ void Editor::insertNewline()
 
 void Editor::deleteChar()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
@@ -1524,6 +1751,9 @@ void Editor::deleteChar()
 
 void Editor::backspace()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
@@ -1655,6 +1885,9 @@ void Editor::backspace()
 
 void Editor::deleteLine()
 {
+  if (isBinaryFile)
+    return;
+
   // SAVE STATE BEFORE MODIFICATION
   if (!isUndoRedoing)
   {
@@ -1723,6 +1956,9 @@ void Editor::deleteLine()
 
 void Editor::deleteSelection()
 {
+  if (isBinaryFile)
+    return;
+
   if (!hasSelection && !isSelecting)
   {
     return;
@@ -1881,6 +2117,9 @@ void Editor::deleteSelection()
 
 void Editor::undo()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_)
   {
     // Commit any pending delta group first
@@ -1982,6 +2221,9 @@ void Editor::undo()
 
 void Editor::redo()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_)
   {
     if (deltaRedoStack_.empty())
@@ -2341,68 +2583,89 @@ void Editor::cutSelection()
 
 void Editor::pasteFromClipboard()
 {
-  // Try to get from system clipboard first
+  // Get clipboard content
   std::string systemClipboard = Clipboard::getFromSystemClipboard();
-
   if (!systemClipboard.empty())
   {
     clipboard = systemClipboard;
   }
-
   if (clipboard.empty())
   {
     return;
   }
 
-  // Create a delta group for the entire paste operation
-  if (useDeltaUndo_ && !isUndoRedoing)
-  {
-    beginDeltaGroup();
-  }
-  else if (!isUndoRedoing)
-  {
-    saveState();
-  }
-
-  // Delete selection if any
-  if (hasSelection || isSelecting)
-  {
-    deleteSelection();
-  }
-
-  // Insert clipboard content
-  size_t start_byte = buffer.lineColToPos(cursorLine, cursorCol);
+  // Save starting position
   int start_line = cursorLine;
   int start_col = cursorCol;
 
-  // Split clipboard by lines and insert
-  std::istringstream iss(clipboard);
-  std::string line;
-  bool firstLine = true;
+  // Save state for undo
+  if (useDeltaUndo_ && !isUndoRedoing)
+    beginDeltaGroup();
+  else if (!isUndoRedoing)
+    saveState();
 
-  while (std::getline(iss, line))
+  // Delete selection if present
+  if (hasSelection || isSelecting)
   {
-    if (!firstLine)
-    {
-      insertNewline();
-    }
-
-    // Insert each character of the line
-    for (char ch : line)
-    {
-      insertChar(ch);
-    }
-
-    firstLine = false;
+    deleteSelection();
+    // Update positions after deletion
+    start_line = cursorLine;
+    start_col = cursorCol;
   }
 
-  // If clipboard ended with newline, add it
-  if (!clipboard.empty() && clipboard.back() == '\n')
+  // Calculate byte position BEFORE insertion
+  size_t byte_pos = buffer.lineColToPos(start_line, start_col);
+
+  // Insert the clipboard text directly into buffer
+  buffer.insertText(byte_pos, clipboard);
+
+  // Calculate new cursor position by counting newlines
+  int newlines = std::count(clipboard.begin(), clipboard.end(), '\n');
+
+  if (newlines == 0)
   {
-    insertNewline();
+    // Single line paste - cursor moves right
+    cursorCol = start_col + clipboard.length();
+  }
+  else
+  {
+    // Multi-line paste - cursor moves down and to end of last line
+    cursorLine = start_line + newlines;
+    size_t last_newline = clipboard.rfind('\n');
+    cursorCol = clipboard.length() - last_newline - 1;
   }
 
-  // Commit the paste as a single undo operation
+  // CRITICAL: Update syntax highlighting with correct parameters
+  if (syntaxHighlighter && !isUndoRedoing)
+  {
+    // Calculate end position AFTER insertion
+    size_t end_byte = buffer.lineColToPos(cursorLine, cursorCol);
+    size_t inserted_bytes = clipboard.length();
+
+    // Notify Tree-sitter of the edit
+    syntaxHighlighter->updateTreeAfterEdit(
+        buffer,
+        byte_pos,       // where we inserted
+        0,              // deleted 0 bytes
+        inserted_bytes, // inserted clipboard.length() bytes
+        start_line,     // old start row
+        start_col,      // old start col
+        start_line,     // old end row (same as start, we inserted)
+        start_col,      // old end col (same as start)
+        cursorLine,     // new end row
+        cursorCol       // new end col
+    );
+
+    // Invalidate cache for affected lines
+    int affected_start = start_line;
+    int affected_end = std::min(cursorLine + 50, buffer.getLineCount() - 1);
+    syntaxHighlighter->invalidateLineRange(affected_start, affected_end);
+  }
+
+  // Adjust viewport to show cursor
+  validateCursorAndViewport();
+
+  // Commit undo state
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     commitDeltaGroup();
@@ -2410,6 +2673,9 @@ void Editor::pasteFromClipboard()
   }
 
   markModified();
+
+  // Force a full syntax reparse in the background
+  forceSyntaxResync();
 }
 
 void Editor::selectAll()
@@ -2432,7 +2698,9 @@ void Editor::initializeViewportHighlighting()
 {
   if (syntaxHighlighter)
   {
-    // Pre-parse viewport so first display() is instant
+    // Only parse if queries are already loaded
+    // This prevents blocking on large files where queries are still loading
+
     syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
   }
 }
@@ -3220,4 +3488,68 @@ void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
     }
     }
   }
+}
+
+int Editor::removePreviousIndent(int amount)
+{
+  if (amount <= 0 || cursorCol <= 0)
+  {
+    return 0;
+  }
+
+  std::string line = buffer.getLine(cursorLine);
+
+  // Count actual removable whitespace
+  int actual_remove = 0;
+  int check_pos = cursorCol - 1;
+
+  while (check_pos >= 0 && actual_remove < amount)
+  {
+    if (line[check_pos] == ' ')
+    {
+      actual_remove++;
+      check_pos--;
+    }
+    else if (line[check_pos] == '\t')
+    {
+      // Tab counts as tabSize spaces
+      int tab_spaces = std::min(amount - actual_remove, tabSize);
+      actual_remove += tab_spaces;
+      check_pos--;
+    }
+    else
+    {
+      break; // Stop at non-whitespace
+    }
+  }
+
+  if (actual_remove > 0)
+  {
+    // Calculate how many characters to actually remove
+    int chars_to_remove = cursorCol - check_pos - 1;
+
+    // Remove the whitespace
+    line.erase(check_pos + 1, chars_to_remove);
+    buffer.replaceLine(cursorLine, line);
+    cursorCol -= chars_to_remove;
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineCache(cursorLine);
+      // syntaxHighlighter->parseFullBuffer(buffer);
+    }
+  }
+
+  return actual_remove;
+}
+
+void Editor::forceSyntaxResync()
+{
+  if (!syntaxHighlighter)
+    return;
+
+#ifdef TREE_SITTER_ENABLED
+  // Schedule a background full reparse to fix any inconsistencies
+  syntaxHighlighter->scheduleBackgroundParse(buffer);
+#endif
 }

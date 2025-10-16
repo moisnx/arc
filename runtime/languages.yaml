@@ -7,6 +7,13 @@ languages:
     extensions: ['html']
     parser_name: "html"
     queries: ["runtime/queries/html/highlights.scm"]
+
+  css:
+    name: "CSS"
+    extensions: ['css']
+    parser_name: "css"
+    queries: ["runtime/queries/css/highlights.scm"]
+    
   c:
     name: "C"
     extensions: ["c", "h"]
@@ -22,8 +29,9 @@ languages:
   python:
     name: "Python"
     extensions: ["py", "pyw", "pyi"]
+    aliases: ["python", "python3", "pipenv"]
     parser_name: "python"
-    queries: ["runtime/queries/python/highlights.scm",]
+    queries: ["runtime/queries/python/highlights.scm"]
     
   rust:
     name: "Rust"
@@ -71,18 +79,20 @@ languages:
   ruby: 
     name: "Ruby"
     extensions: ["rb"]
+    aliases: ["ruby", "jruby"]
     parser_name: "ruby"
     queries: ["runtime/queries/ruby/highlights.scm"]
   
   bash: 
     name: "Bash"
     extensions: ["sh", "bashrc", "zshrc"]
+    aliases: ["bash", "sh", "zsh"]
     parser_name: "bash"
     queries: ["runtime/queries/bash/highlights.scm"]
   
   yaml:
    name: "Yaml"
-   extensions: ["yaml"]
+   extensions: ["yaml", "yml"]
    parser_name: "yaml"
    queries: ["runtime/queries/yaml/highlights.scm"]
 
@@ -98,4 +108,73 @@ languages:
    parser_name: "json"
    queries: ["runtime/queries/json/highlights.scm"]
 
+  lua:
+    name: "Lua"
+    extensions: ["lua"]  
+    parser_name: "lua"
+    builtin: true
+    queries: ["runtime/queries/lua/highlights.scm"]
   
+  cmake:
+    name: "CMake"
+    extensions: ["cmake"]
+    # KEY ADDITION: Filename patterns for CMake
+    filenames: ["CMakeLists.txt", "CMakeCache.txt"]
+    parser_name: "cmake"
+    builtin: true
+    queries: ["runtime/queries/cmake/highlights.scm"]
+
+  make:
+    name: "Make"
+    extensions: ["make", "makefile"]
+    # KEY ADDITION: Filename patterns for Make
+    filenames: ["Makefile","makefile", "GNUmakefile", "BSDmakefile"]
+    parser_name: "make"
+    builtin: true
+    queries: ["runtime/queries/make/highlights.scm"]
+
+  # dockerfile:
+  #   name: "Dockerfile"
+  #   extensions: ["dockerfile"]
+  #   # Dockerfile without extension
+  #   filenames:
+  #     - "Dockerfile"
+  #     - "dockerfile"
+  #   parser_name: "dockerfile"
+  #   queries:
+  #     - "runtime/queries/dockerfile/highlights.scm"
+
+  # gitignore:
+  #   name: "Gitignore"
+  #   extensions: ["gitignore"]
+  #   # Git-related files
+  #   filenames:
+  #     - ".gitignore"
+  #     - ".gitattributes"
+  #     - ".gitconfig"
+  #   parser_name: "gitignore"
+  #   queries:
+  #     - "runtime/queries/gitignore/highlights.scm"
+
+  # nginx:
+  #   name: "Nginx"
+  #   extensions: ["conf"]
+  #   # Nginx config files without extension
+  #   filenames:
+  #     - "nginx.conf"
+  #     - "nginx"
+  #   parser_name: "nginx"
+  #   queries:
+  #     - "runtime/queries/nginx/highlights.scm"
+
+  # properties:
+  #   name: "Properties"
+  #   extensions: ["properties", "gradle"]
+  #   # Java/Gradle properties files
+  #   filenames:
+  #     - "gradle.properties"
+  #     - "build.properties"
+  #     - ".properties"
+  #   parser_name: "properties"
+  #   queries:
+  #     - "runtime/queries/properties/highlights.scm"

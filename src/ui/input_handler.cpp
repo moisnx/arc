@@ -1,6 +1,7 @@
 #include "input_handler.h"
 #include <fstream>
 #include <iostream>
+#include <ncursesw/ncurses.h>
 #include <optional>
 
 // PDCursesMod key code compatibility
@@ -30,6 +31,9 @@ InputHandler::InputHandler(Editor &editor)
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
+  if (editor_.getIsBinary() && key != CTRL('q') && key != KEY_RESIZE)
+    return KeyResult::NOT_HANDLED;
+
   // Handle special events first
   if (key == KEY_MOUSE && mouse_enabled_)
   {
@@ -113,6 +117,7 @@ InputHandler::handleGlobalShortcut(int key)
     }
     return KeyResult::REDRAW;
 
+  case CTRL('v'):
   case CTRL('p'):
     editor_.pasteFromClipboard();
     return KeyResult::REDRAW;
