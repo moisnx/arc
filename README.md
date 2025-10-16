@@ -8,14 +8,34 @@
 
 <p align="center">
   <a href="https://github.com/moisnx/arc/actions"><img src="https://img.shields.io/github/actions/workflow/status/moisnx/arc/ci.yml?branch=main&style=flat-square" alt="Build Status"></a>
-  <a href="https://github.com/moisnx/arc/blob/main/LICENSE"><img src="https://img.shields.io/github/license/moisnx/arc?style=flat-square" alt="License"></a>
+  <a href="https://github.com/moisnx/arc/blob/main/LICENSE"><img src="https://img.shields.io/github/license/moisnx?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square" alt="Platforms">
   <img src="https://img.shields.io/badge/editor%20type-terminal-informational?style=flat-square">
+  <img src="https://img.shields.io/badge/status-in%20development-orange?style=flat-square" alt="Development Status">
 </p>
 
 ---
 
 > **Arc** combines the accessibility of nano with powerful features and a clean interface.
+
+---
+
+## ⚠️ Development Status
+
+**Arc is currently under active development and is not production-ready.** Expect bugs, breaking changes, and incomplete features.
+
+### Known Issues
+
+- **Windows:** Cursor bouncing and rendering artifacts
+- **Color Rendering:** Theme color mismatches across platforms
+- **Project Structure:** Code organization is being refactored
+- **Stability:** Crashes and unexpected behavior may occur
+
+**We recommend:**
+- Using Arc for experimental purposes only
+- Testing in non-critical environments
+- Reporting bugs to help improve stability
+- Checking back regularly for updates
 
 ---
 
@@ -240,6 +260,8 @@ arc/
 └── CMakeLists.txt
 ```
 
+> **Note:** Project structure is currently being refactored and may change significantly.
+
 </details>
 
 See [build.md](build.md) for advanced setup and troubleshooting.
@@ -262,6 +284,8 @@ See [build.md](build.md) for advanced setup and troubleshooting.
 ## 👥 Community & Contributing
 
 💡 **Contributions welcome!**
+
+Since Arc is in early development, contributions that help stabilize core functionality are especially appreciated.
 
 1. Fork & create a feature branch
 2. Follow [.gitmessage](.gitmessage) for commits
