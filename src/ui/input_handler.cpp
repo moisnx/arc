@@ -1,7 +1,11 @@
 #include "input_handler.h"
 #include <fstream>
 #include <iostream>
+#ifdef _WIN32
+#include <curses.h>
+#else
 #include <ncursesw/ncurses.h>
+#endif
 #include <optional>
 
 // PDCursesMod key code compatibility
