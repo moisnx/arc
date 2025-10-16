@@ -67,3 +67,18 @@
 [submodule "deps/grammars/tree-sitter-json"]
 	path = deps/grammars/tree-sitter-json
 	url = https://github.com/tree-sitter/tree-sitter-json
+[submodule "deps/grammars/tree-sitter-lua"]
+	path = deps/grammars/tree-sitter-lua
+	url = https://github.com/tjdevries/tree-sitter-lua
+[submodule "deps/grammars/tree-sitter-css"]
+	path = deps/grammars/tree-sitter-css
+	url = https://github.com/tree-sitter/tree-sitter-css
+[submodule "deps/grammars/tree-sitter-cmake"]
+	path = deps/grammars/tree-sitter-cmake
+	url = https://github.com/uyha/tree-sitter-cmake/
+[submodule "deps/grammars/tree-sitter-make"]
+	path = deps/grammars/tree-sitter-make
+	url = https://github.com/alemuller/tree-sitter-make
+[submodule "deps/tomlplusplus"]
+	path = deps/tomlplusplus
+	url = https://github.com/marzer/tomlplusplus.git
