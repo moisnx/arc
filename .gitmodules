@@ -82,3 +82,6 @@
 [submodule "deps/tomlplusplus"]
 	path = deps/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git
+[submodule "deps/grammars/tree-sitter-powershell"]
+	path = deps/grammars/tree-sitter-powershell
+	url = https://github.com/airbus-cert/tree-sitter-powershell
