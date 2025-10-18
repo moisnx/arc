@@ -468,6 +468,9 @@ set(SOURCES
     src/ui/browser_renderer.cpp
     src/features/syntax_config_loader.cpp
     src/features/syntax_highlighter.cpp
+    src/features/injection_manager.cpp
+    src/features/injection_manager_impl.cpp
+    src/features/markdown_renderer.cpp
     src/benchmark/benchmark.cpp
     src/modes/browser_mode.cpp
     src/modes/editor_mode.cpp

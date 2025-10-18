@@ -1,37 +1,42 @@
 #include "input_handler.h"
-#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <vector>
+
 #ifdef _WIN32
 #include <curses.h>
 #else
 #include <ncursesw/ncurses.h>
 #endif
-#include <optional>
 
 // PDCursesMod key code compatibility
 #define CTRL(x) ((x) & 0x1f)
 #define KEY_TAB 9
-#define KEY_ENTER 10
+// #define KEY_ENTER 10
 #define KEY_ESC 27
 #define KEY_BACKSPACE_ALT 127
 
 #ifdef _WIN32
 #define GETMOUSE_FUNC nc_getmouse
-
-// PDCursesMod VT-mode extended key codes
 #define PDC_KEY_UP 60418
 #define PDC_KEY_DOWN 60419
 #define PDC_KEY_RIGHT 60420
 #define PDC_KEY_LEFT 60421
-
 #else
 #define GETMOUSE_FUNC getmouse
 #endif
 
 InputHandler::InputHandler(Editor &editor)
-    : editor_(editor), mouse_enabled_(true)
+    : editor_(editor), mouse_enabled_(true), pending_sequence_key_(0)
 {
 }
+
+// ----------------------------------------------------------------------
+// Core Key Handler
+// ----------------------------------------------------------------------
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
@@ -50,15 +55,13 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
   }
 
   // Global shortcuts (Ctrl+S, Ctrl+Z, etc.)
-  // FIX: If a global shortcut is handled, return immediately
-  // This prevents the movement key handler from clearing the selection
   if (auto result = handleGlobalShortcut(key))
   {
-    return *result; // Return immediately - don't process movement keys
+    return *result;
   }
 
   // Movement keys (handles both normal and shift+movement for selection)
-  if (handleMovementKey(key, false))
+  if (handleMovementKey(key))
   {
     return KeyResult::REDRAW;
   }
@@ -85,6 +88,10 @@ InputHandler::KeyResult InputHandler::handleKey(int key)
   return KeyResult::NOT_HANDLED;
 }
 
+// ----------------------------------------------------------------------
+// Global Shortcuts - SIMPLIFIED WITH DIRECT KEYS
+// ----------------------------------------------------------------------
+
 std::optional<InputHandler::KeyResult>
 InputHandler::handleGlobalShortcut(int key)
 {
@@ -103,10 +110,40 @@ InputHandler::handleGlobalShortcut(int key)
     return KeyResult::REDRAW;
 
   case CTRL('q'):
+    if (editor_.hasUnsavedChanges())
+    {
+      // Show modal and get user decision
+      UnsavedModalResult result = editor_.displayUnsavedChangesModal();
+
+      switch (result)
+      {
+      case UnsavedModalResult::SAVE_AND_QUIT:
+        // User chose to save and quit
+        if (editor_.saveFile())
+        {
+          // Save successful, proceed with quit
+          return KeyResult::QUIT;
+        }
+        else
+        {
+          // Save failed - show error and cancel quit
+          displayStatusMessage("Error: Could not save file!");
+          return KeyResult::REDRAW;
+        }
+
+      case UnsavedModalResult::QUIT_WITHOUT_SAVE:
+        // User confirmed quit without saving
+        return KeyResult::QUIT;
+
+      case UnsavedModalResult::CANCEL:
+        // User cancelled - redraw editor and continue editing
+        return KeyResult::REDRAW;
+      }
+    }
+
     return KeyResult::QUIT;
 
   case CTRL('c'):
-    // FIX: Only copy if there's actually a selection
     if (editor_.hasSelection || editor_.isSelecting)
     {
       editor_.copySelection();
@@ -114,7 +151,6 @@ InputHandler::handleGlobalShortcut(int key)
     return KeyResult::REDRAW;
 
   case CTRL('x'):
-    // FIX: Only cut if there's actually a selection
     if (editor_.hasSelection || editor_.isSelecting)
     {
       editor_.cutSelection();
@@ -130,14 +166,227 @@ InputHandler::handleGlobalShortcut(int key)
     editor_.selectAll();
     return KeyResult::REDRAW;
 
+  // ========== MARKDOWN CONTROLS (SIMPLE DIRECT KEYS) ==========
+
+  // CTRL+L: Toggle markdown rendering ON/OFF
+  case CTRL('l'):
+    if (editor_.getSyntaxHighlighter() &&
+        editor_.getSyntaxHighlighter()->getCurrentLanguage() == "markdown")
+    {
+      editor_.toggleMarkdownRendering();
+      std::string status = editor_.isMarkdownRenderingEnabled()
+                               ? "Markdown rendering: ON"
+                               : "Markdown rendering: OFF";
+      displayStatusMessage(status);
+      return KeyResult::REDRAW;
+    }
+    displayStatusMessage("Not a markdown file");
+    return KeyResult::REDRAW;
+
+  // CTRL+]: Cycle code block style
+  case CTRL(']'):
+    if (editor_.getSyntaxHighlighter() &&
+        editor_.getSyntaxHighlighter()->getCurrentLanguage() == "markdown" &&
+        editor_.isMarkdownRenderingEnabled())
+    {
+      auto *renderer = editor_.getMarkdownRenderer();
+      if (renderer)
+      {
+        renderer->cycleCodeBlockStyle();
+        auto config = renderer->getConfig();
+        std::string style_name =
+            MarkdownRenderConfig::getStyleName(config.block_style);
+        displayStatusMessage("Code block: " + style_name);
+        return KeyResult::REDRAW;
+      }
+    }
+    displayStatusMessage("Enable markdown rendering first (Ctrl+L)");
+    return KeyResult::REDRAW;
+
+  // CTRL+[: Cycle heading style
+  case CTRL('['):
+    if (editor_.getSyntaxHighlighter() &&
+        editor_.getSyntaxHighlighter()->getCurrentLanguage() == "markdown" &&
+        editor_.isMarkdownRenderingEnabled())
+    {
+      auto *renderer = editor_.getMarkdownRenderer();
+      if (renderer)
+      {
+        auto config = renderer->getConfig();
+
+        // Cycle through heading styles
+        switch (config.heading_style)
+        {
+        case HeadingStyle::MODERN:
+          config.heading_style = HeadingStyle::CLASSIC;
+          break;
+        case HeadingStyle::CLASSIC:
+          config.heading_style = HeadingStyle::MINIMAL;
+          break;
+        case HeadingStyle::MINIMAL:
+          config.heading_style = HeadingStyle::UNDERLINED;
+          break;
+        case HeadingStyle::UNDERLINED:
+          config.heading_style = HeadingStyle::MODERN;
+          break;
+        }
+
+        renderer->setConfig(config);
+        std::string style_name =
+            MarkdownRenderConfig::getStyleName(config.heading_style);
+        displayStatusMessage("Heading: " + style_name);
+        return KeyResult::REDRAW;
+      }
+    }
+    displayStatusMessage("Enable markdown rendering first (Ctrl+L)");
+    return KeyResult::REDRAW;
+
+  // CTRL+\: Cycle code indent style
+  case CTRL('?'):
+    if (editor_.getSyntaxHighlighter() &&
+        editor_.getSyntaxHighlighter()->getCurrentLanguage() == "markdown" &&
+        editor_.isMarkdownRenderingEnabled())
+    {
+      auto *renderer = editor_.getMarkdownRenderer();
+      if (renderer)
+      {
+        auto config = renderer->getConfig();
+
+        // Cycle through indent styles
+        switch (config.block_indent)
+        {
+        case CodeBlockIndent::NONE:
+          config.block_indent = CodeBlockIndent::MINIMAL;
+          break;
+        case CodeBlockIndent::MINIMAL:
+          config.block_indent = CodeBlockIndent::GUTTER;
+          break;
+        case CodeBlockIndent::GUTTER:
+          config.block_indent = CodeBlockIndent::STANDARD;
+          break;
+        case CodeBlockIndent::STANDARD:
+          config.block_indent = CodeBlockIndent::NONE;
+          break;
+        }
+
+        renderer->setConfig(config);
+
+        std::string indent_name;
+        switch (config.block_indent)
+        {
+        case CodeBlockIndent::NONE:
+          indent_name = "none";
+          break;
+        case CodeBlockIndent::MINIMAL:
+          indent_name = "minimal";
+          break;
+        case CodeBlockIndent::GUTTER:
+          indent_name = "gutter";
+          break;
+        case CodeBlockIndent::STANDARD:
+          indent_name = "standard";
+          break;
+        }
+
+        displayStatusMessage("Indent: " + indent_name);
+        return KeyResult::REDRAW;
+      }
+    }
+    displayStatusMessage("Enable markdown rendering first (Ctrl+L)");
+    return KeyResult::REDRAW;
+
+  // F1: Show help screen
+  case CTRL('e'):
+    showHelpScreen();
+    return KeyResult::REDRAW;
+
   default:
-    return std::nullopt; // No shortcut handled
+    return std::nullopt;
   }
 }
 
-bool InputHandler::handleMovementKey(int key, bool shift_held)
+// ----------------------------------------------------------------------
+// Editing Keys
+// ----------------------------------------------------------------------
+
+bool InputHandler::handleEditingKey(int key)
 {
-  // Detect if shift is being held for this key
+  if (key == '\n' || key == KEY_ENTER)
+  {
+    // Delete selection first if one exists
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+
+    // Call the core editor logic to create a new line
+    editor_.insertNewline();
+    return true;
+  }
+  switch (key)
+  {
+  case KEY_BACKSPACE:
+  case KEY_BACKSPACE_ALT:
+  case 8:
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    else
+    {
+      editor_.backspace();
+    }
+    return true;
+
+  case KEY_DC: // Delete key
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    else
+    {
+      editor_.deleteChar();
+    }
+    return true;
+
+  case KEY_ENTER:
+  case '\r': // Handle both Enter and Ctrl+M as newline
+    // Delete selection first if one exists
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    editor_.insertNewline();
+    return true;
+
+  case KEY_TAB:
+    if (editor_.hasSelection || editor_.isSelecting)
+    {
+      editor_.deleteSelection();
+    }
+    // Insert 4 spaces instead of tab
+    for (int i = 0; i < 4; i++)
+    {
+      editor_.insertChar(' ');
+    }
+    return true;
+
+  case KEY_ESC:
+    // Clear selection on escape
+    editor_.clearSelection();
+    return true;
+
+  default:
+    return false;
+  }
+}
+
+// ----------------------------------------------------------------------
+// Movement Keys
+// ----------------------------------------------------------------------
+
+bool InputHandler::handleMovementKey(int key)
+{
   bool extending_selection = false;
 
 #ifdef _WIN32
@@ -147,7 +396,7 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
   }
 #endif
 
-  // Check for shift-modified arrow keys (Unix/ncurses)
+  // Check for shift-modified arrow keys
   switch (key)
   {
   case KEY_SLEFT:
@@ -162,7 +411,7 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
     break;
   }
 
-  // Determine if this is actually a movement key
+  // Determine if this is a movement key
   bool is_movement_key = false;
   switch (key)
   {
@@ -190,20 +439,18 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
     break;
   }
 
-  // If not a movement key, return early
   if (!is_movement_key)
   {
     return false;
   }
 
-  // Now handle selection state
+  // Handle selection state
   if (extending_selection)
   {
     editor_.startSelectionIfNeeded();
   }
   else
   {
-    // Clear selection BEFORE movement if no shift
     editor_.clearSelection();
   }
 
@@ -271,7 +518,6 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
     break;
   }
 
-  // Update selection end if extending
   if (moved && extending_selection)
   {
     editor_.updateSelectionEnd();
@@ -280,68 +526,9 @@ bool InputHandler::handleMovementKey(int key, bool shift_held)
   return moved;
 }
 
-bool InputHandler::handleEditingKey(int key)
-{
-  switch (key)
-  {
-  case KEY_BACKSPACE:
-  case KEY_BACKSPACE_ALT:
-  case 8: // Ctrl+H
-    // If there's a selection, delete it instead of single backspace
-    if (editor_.hasSelection || editor_.isSelecting)
-    {
-      editor_.deleteSelection();
-    }
-    else
-    {
-      editor_.backspace();
-    }
-    return true;
-
-  case KEY_DC: // Delete key
-    // If there's a selection, delete it
-    if (editor_.hasSelection || editor_.isSelecting)
-    {
-      editor_.deleteSelection();
-    }
-    else
-    {
-      editor_.deleteChar();
-    }
-    return true;
-
-  case KEY_ENTER:
-  case '\r':
-    // Delete selection first if one exists
-    if (editor_.hasSelection || editor_.isSelecting)
-    {
-      editor_.deleteSelection();
-    }
-    editor_.insertNewline();
-    return true;
-
-  case KEY_TAB:
-    // Delete selection first if one exists
-    if (editor_.hasSelection || editor_.isSelecting)
-    {
-      editor_.deleteSelection();
-    }
-    // Insert 4 spaces instead of tab
-    for (int i = 0; i < 4; i++)
-    {
-      editor_.insertChar(' ');
-    }
-    return true;
-
-  case KEY_ESC:
-    // Clear selection on escape
-    editor_.clearSelection();
-    return true;
-
-  default:
-    return false;
-  }
-}
+// ----------------------------------------------------------------------
+// Event Handlers
+// ----------------------------------------------------------------------
 
 InputHandler::KeyResult InputHandler::handleMouseEvent()
 {
@@ -364,4 +551,106 @@ InputHandler::KeyResult InputHandler::handleResizeEvent()
 bool InputHandler::isPrintableChar(int key) const
 {
   return key >= 32 && key <= 126;
+}
+
+void InputHandler::showHelpScreen()
+{
+  // A structure to hold help screen data: Category, Key, Description
+  using HelpEntry = std::tuple<std::string, std::string, std::string>;
+  std::vector<HelpEntry> entries = {
+      // Core Commands
+      {"CORE COMMANDS", "Ctrl+Q", "Quit Editor"},
+      {"", "Ctrl+S", "Save File"},
+      {"", "F1 / Esc", "Close Help Screen"},
+      {"", "Ctrl+L", "Toggle Markdown Rendering"},
+
+      // Editor Actions
+      {"EDITOR ACTIONS", "Ctrl+Z", "Undo"},
+      {"", "Ctrl+Y", "Redo"},
+      {"", "Ctrl+A", "Select All"},
+      {"", "Ctrl+C", "Copy Selection"},
+      {"", "Ctrl+X", "Cut Selection"},
+      {"", "Ctrl+V / Ctrl+P", "Paste From Clipboard"},
+      {"", "Backspace / Del", "Delete Character / Selection"},
+      {"", "Tab", "Insert 4 Spaces (Soft Tab)"},
+
+      // Markdown Configuration
+      {"MARKDOWN CONFIG", "Ctrl+]", "Cycle Code Block Style"},
+      {"", "Ctrl+[", "Cycle Heading Style"},
+      {"", "Ctrl+\\", "Cycle Code Indent Style"},
+      {"NAVIGATION", "Arrow Keys", "Move Cursor"},
+      {"", "Shift + Arrows", "Select Text"},
+      {"", "Home / End", "Move to Line Start / End"},
+      {"", "Page Up / Down", "Scroll by Page"},
+  };
+
+  // Determine column widths
+  size_t cat_w = 0, key_w = 0, desc_w = 0;
+  for (auto &e : entries)
+  {
+    cat_w = std::max(cat_w, std::get<0>(e).length());
+    key_w = std::max(key_w, std::get<1>(e).length());
+    desc_w = std::max(desc_w, std::get<2>(e).length());
+  }
+  // Provide some minimum spacing
+  cat_w = std::max(cat_w, size_t(14));
+  key_w = std::max(key_w, size_t(12));
+
+  // Print header
+  std::cout << std::string(cat_w + key_w + desc_w + 6, '=') << "\n";
+  std::cout << std::left << std::setw((int)cat_w) << "Category" << "  "
+            << std::setw((int)key_w) << "Key" << "  " << "Description\n";
+  std::cout << std::string(cat_w + key_w + desc_w + 6, '=') << "\n";
+
+  // Print rows, grouping categories visually (blank category prints as
+  // continuation)
+  std::string last_category;
+  for (auto &e : entries)
+  {
+    const auto &cat = std::get<0>(e);
+    const auto &key = std::get<1>(e);
+    const auto &desc = std::get<2>(e);
+
+    if (!cat.empty())
+    {
+      // Category row
+      std::cout << std::left << std::setw((int)cat_w) << cat << "  "
+                << std::setw((int)key_w) << key << "  " << desc << "\n";
+      last_category = cat;
+    }
+    else
+    {
+      // Continuation row (no repeated category)
+      std::cout << std::left << std::setw((int)cat_w) << " " << "  "
+                << std::setw((int)key_w) << key << "  " << desc << "\n";
+    }
+  }
+
+  std::cout << std::string(cat_w + key_w + desc_w + 6, '=') << "\n";
+  // Minimal hint: adapt this printing to your UI window/overlay API where
+  // appropriate.
+}
+
+void InputHandler::displayStatusMessage(const std::string &message)
+{
+  int rows, cols;
+  getmaxyx(stdscr, rows, cols);
+
+  // Display at bottom of screen
+  move(rows - 2, 0);
+  attron(A_STANDOUT);
+  clrtoeol();
+
+  if (!message.empty())
+  {
+    // Center the message
+    int start_col = (cols - static_cast<int>(message.length())) / 2;
+    if (start_col < 0)
+      start_col = 0;
+
+    mvprintw(rows - 2, start_col, "%s", message.c_str());
+  }
+
+  attroff(A_STANDOUT);
+  refresh();
 }

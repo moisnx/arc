@@ -2,7 +2,6 @@
 // #include "src/ui/colors.h"
 #include "src/core/clipboard.h"
 #include "src/core/config_manager.h"
-// #include "src/core/logger.h"
 #include "src/features/indent_manager.h"
 #include "src/ui/style_manager.h"
 #include <algorithm>
@@ -23,6 +22,11 @@
 #include <sstream>
 #include <string>
 #include <utility>
+
+#ifndef _WIN32
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 // Windows-specific mouse codes
 #ifndef BUTTON4_PRESSED
@@ -46,6 +50,11 @@ Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
 #ifdef TREE_SITTER_ENABLED
   config_loader_ = std::make_unique<SyntaxConfigLoader>();
   indentManager_ = std::make_unique<IndentManager>();
+  markdownRenderer_ = std::make_unique<MarkdownRenderer>();
+  // image_renderer_ = std::make_unique<ImageRenderer>();
+  // is_image_file_ = false;
+
+  markdownRenderer_->setEnabled(false);
   indentManager_->setTabSize(tabSize);
   // indentManager_->setDebugMode(true);
   std::string syntax_dir = ConfigManager::getSyntaxRulesDir();
@@ -465,8 +474,336 @@ void Editor::displayBinaryWarning()
   doupdate();
 }
 
+// =================================================================
+// Unsaved Changes Modal with Proper Overlay Effect
+// =================================================================
+
+UnsavedModalResult Editor::displayUnsavedChangesModal()
+{
+  if (!isModified)
+    return UnsavedModalResult::QUIT_WITHOUT_SAVE;
+
+  int rows, cols;
+  getmaxyx(stdscr, rows, cols);
+
+  // Draw the modal
+  auto drawModal = [&]()
+  {
+    // DON'T clear the screen - we want to show the editor content behind
+    // Just display the current editor state first
+    display();
+
+    int centerRow = rows / 2 - 6;
+    int centerCol = cols / 2;
+    int modalWidth = 56;
+    int modalLeft = centerCol - (modalWidth / 2);
+
+    // Draw semi-transparent dark overlay ONLY around the modal area
+    // Create a "dimmed" effect by drawing with a darker color pair
+    attrset(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+    // Draw overlay above modal
+    for (int i = 0; i < centerRow; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Draw overlay beside modal (left and right)
+    for (int i = centerRow; i < centerRow + 16; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < modalLeft; j++)
+      {
+        addch(' ');
+      }
+      for (int j = modalLeft + modalWidth; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Draw overlay below modal
+    for (int i = centerRow + 16; i < rows - 1; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Now draw the modal box with solid background
+    // Fill modal background
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+    for (int i = centerRow; i < centerRow + 16; i++)
+    {
+      move(i, modalLeft);
+      for (int j = 0; j < modalWidth; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // TOP BORDER with gradient effect
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow, modalLeft, "%lc", L'╔');
+    // FIX: Replaced addch(L'═') in loop with mvprintw(..., "%lc", L'═')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow, modalLeft + i, "%lc", L'═');
+    }
+    // FIX: Replaced addch(L'╗') with mvprintw(..., "%lc", L'╗')
+    mvprintw(centerRow, modalLeft + modalWidth - 1, "%lc", L'╗');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // ICON & TITLE ROW
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, centerCol - 10, "   UNSAVED CHANGES   ");
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // SEPARATOR
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 2, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 2, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 2, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // EMPTY LINE for spacing
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 3, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 3, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // MAIN MESSAGE
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 4, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+    mvprintw(centerRow + 4, centerCol - 19,
+             "Your changes will be lost if you quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 4, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Second line of message
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 5, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+    mvprintw(centerRow + 5, centerCol - 20,
+             "without saving. Do you want to continue?");
+    attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 5, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 6, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 6, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // FILE INFO SECTION
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 7, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 7, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 7, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Filename display
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 8, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+    mvprintw(centerRow + 8, modalLeft + 4, "File:");
+    attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+    std::string displayName = filename.empty() ? "[No Name]" : filename;
+    if (displayName.length() > 40)
+    {
+      displayName = "..." + displayName.substr(displayName.length() - 37);
+    }
+
+    attron(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+    mvprintw(centerRow + 8, modalLeft + 10, "%s", displayName.c_str());
+    attroff(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 8, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 9, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 9, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // ACTIONS SEPARATOR
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 10, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 10, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 10, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line before buttons
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 11, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 11, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // ACTION BUTTONS
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 12, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Save button (green)
+    attron(COLOR_PAIR(ColorPairs::UI_SUCCESS) | A_BOLD);
+    mvprintw(centerRow + 12, centerCol - 20, "[ S ] Save & Quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_SUCCESS) | A_BOLD);
+
+    // Don't Save button (red)
+    attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+    mvprintw(centerRow + 12, centerCol + 4, "[ Q ] Quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 12, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Cancel button
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 13, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_INFO));
+    mvprintw(centerRow + 13, centerCol - 10, "[ ESC ] Cancel");
+    attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 13, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line after buttons
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 14, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 14, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // BOTTOM BORDER
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 15, modalLeft, "%lc", L'╚');
+    // FIX: Replaced addch(L'═') in loop with mvprintw(..., "%lc", L'═')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 15, modalLeft + i, "%lc", L'═');
+    }
+    // FIX: Replaced addch(L'╝') with mvprintw(..., "%lc", L'╝')
+    mvprintw(centerRow + 15, modalLeft + modalWidth - 1, "%lc", L'╝');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // SUBTLE HINT AT BOTTOM (preserve status bar area)
+    attron(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+    mvprintw(rows - 2, centerCol - 18, "Tip: Use Ctrl+S to save anytime");
+    attroff(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+    wnoutrefresh(stdscr);
+    doupdate();
+  };
+
+  // Initial draw
+  drawModal();
+
+  // Input loop - wait for user decision
+  while (true)
+  {
+    int key = getch();
+
+    // Handle user input
+    switch (key)
+    {
+    case 's':
+    case 'S':
+      // Save and quit
+      return UnsavedModalResult::SAVE_AND_QUIT;
+
+    case 'q':
+    case 'Q':
+      // Quit without saving
+      return UnsavedModalResult::QUIT_WITHOUT_SAVE;
+
+    case 27: // ESC key
+      // Cancel - go back to editing
+      return UnsavedModalResult::CANCEL;
+
+    case KEY_RESIZE:
+      // Handle terminal resize - redraw modal
+      getmaxyx(stdscr, rows, cols);
+      drawModal();
+      break;
+
+    default:
+      // Ignore other keys
+      break;
+    }
+  }
+}
+
 void Editor::display()
 {
+
   if (isBinaryFile)
   {
     displayBinaryWarning();
@@ -513,6 +850,8 @@ void Editor::display()
   }
 
   int currentTabSize = ConfigManager::getTabSize();
+  bool isMarkdown = syntaxHighlighter &&
+                    syntaxHighlighter->getCurrentLanguage() == "markdown";
 
   // OPTIMIZATION: Batch render - minimize attribute changes
   for (int i = viewportTop; i < endLine; i++)
@@ -538,17 +877,61 @@ void Editor::display()
       addch(' ');
     }
 
-    // Get line content
-    std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
+    // Get raw line content
+    std::string rawLine = buffer.getLine(i);
+    std::string expandedLine = expandTabs(rawLine, currentTabSize);
 
-    // OPTIMIZATION: Get highlighting spans (cached if available)
-    std::vector<ColorSpan> currentLineSpans;
-    if (syntaxHighlighter)
+    // NEW: Check if we should apply Markdown rendering
+    std::string displayLine = expandedLine;
+    std::vector<ColorSpan> markdownSpans;
+    int leftPadding = 0;
+    bool useMarkdownSpans = false;
+    bool isCodeBlockContent = false;
+    std::string codeLanguage;
+
+    if (isMarkdown && markdownRenderer_ && markdownRenderer_->isEnabled())
     {
+      auto renderInfo = markdownRenderer_->renderLine(
+          rawLine, i, cursorLine, buffer, syntaxHighlighter->getTree());
+
+      if (!renderInfo.hide_line)
+      {
+        displayLine = expandTabs(renderInfo.display_text, currentTabSize);
+        leftPadding = renderInfo.left_padding;
+
+        // CRITICAL: Check if this is code block content
+        isCodeBlockContent = renderInfo.is_code_block;
+        codeLanguage = renderInfo.code_language;
+
+        // Use markdown's spans ONLY for non-code-block lines
+        if (!isCodeBlockContent && !renderInfo.spans.empty())
+        {
+          markdownSpans = renderInfo.spans;
+          useMarkdownSpans = true;
+        }
+      }
+      else
+      {
+        // Line is hidden (e.g., empty fence line)
+        displayLine = "";
+      }
+    }
+
+    // Get highlighting spans
+    std::vector<ColorSpan> currentLineSpans;
+
+    if (useMarkdownSpans)
+    {
+      // Use markdown-provided spans (headings, lists, etc.)
+      currentLineSpans = markdownSpans;
+    }
+    else if (syntaxHighlighter)
+    {
+      // Get syntax highlighting (normal lines + code blocks!)
       try
       {
         currentLineSpans =
-            syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
+            syntaxHighlighter->getHighlightSpans(displayLine, i, buffer);
       }
       catch (...)
       {
@@ -560,14 +943,22 @@ void Editor::display()
         hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
 
     // Build render spans that combine highlighting + selection
-    std::vector<RenderSpan> renderSpans =
-        buildRenderSpans(expandedLine, currentLineSpans, lineHasSelection,
+    std::vector<RenderSpan> finalRenderSpans =
+        buildRenderSpans(displayLine, currentLineSpans, lineHasSelection,
                          sel_start_line, sel_end_line, sel_start_col,
                          sel_end_col, i, viewportLeft, contentWidth);
 
     // Render each span as a batch
     int screenCol = 0;
-    for (const auto &span : renderSpans)
+
+    // Add left padding for markdown (e.g., code block indent)
+    for (int p = 0; p < leftPadding && screenCol < contentWidth; p++)
+    {
+      addch(' ');
+      screenCol++;
+    }
+
+    for (const auto &span : finalRenderSpans)
     {
       if (screenCol >= contentWidth)
         break;
@@ -594,12 +985,12 @@ void Editor::display()
       for (int col = span.start; col < span.end && screenCol < contentWidth;
            ++col)
       {
-        int fileCol = viewportLeft + screenCol;
+        int fileCol = viewportLeft + col;
         char ch = ' ';
 
-        if (fileCol >= 0 && fileCol < (int)expandedLine.length())
+        if (fileCol >= 0 && fileCol < (int)displayLine.length())
         {
-          ch = expandedLine[fileCol];
+          ch = displayLine[fileCol];
           if (ch < 32 || ch > 126)
             ch = ' ';
         }
@@ -1311,7 +1702,6 @@ bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
 
-  // CHECK FOR BINARY FILE FIRST
   if (BinaryDetector::shouldTreatAsBinary(filename))
   {
     isBinaryFile = true;
@@ -1371,12 +1761,18 @@ bool Editor::loadFile(const std::string &fname)
     }
 
     // FALLBACK: No specific language detected, use "text"
-    syntaxHighlighter->setLanguage("text");
+    if (language_name == "markdown" && markdownRenderer_)
+    {
+      markdownRenderer_->updateState(buffer, syntaxHighlighter->getTree());
+    }
+
+    syntaxHighlighter->setLanguage(language_name);
   }
 
   isModified = false;
   return true;
 }
+
 bool Editor::saveFile()
 {
   if (filename.empty())
@@ -1498,6 +1894,7 @@ void Editor::insertChar(char ch)
 
     cursorCol++;
     markModified();
+    updateMarkdownRendering();
 
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
@@ -1589,6 +1986,7 @@ void Editor::insertNewline()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -1635,6 +2033,7 @@ void Editor::insertNewline()
     }
     viewportLeft = 0;
     markModified();
+    updateMarkdownRendering();
   }
 }
 
@@ -1705,6 +2104,7 @@ void Editor::deleteChar()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -1727,6 +2127,7 @@ void Editor::deleteChar()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
     else if (cursorLine < buffer.getLineCount() - 1)
     {
@@ -1745,6 +2146,7 @@ void Editor::deleteChar()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
   }
 }
@@ -1828,6 +2230,7 @@ void Editor::backspace()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -1856,6 +2259,7 @@ void Editor::backspace()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
     else if (cursorLine > 0)
     {
@@ -1879,6 +2283,7 @@ void Editor::backspace()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
   }
 }
@@ -1948,6 +2353,7 @@ void Editor::deleteLine()
 
   validateCursorAndViewport();
   markModified();
+  updateMarkdownRendering();
 }
 
 // =================================================================
@@ -2057,6 +2463,7 @@ void Editor::deleteSelection()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -2112,6 +2519,7 @@ void Editor::deleteSelection()
     updateCursorAndViewport(startLine, startCol);
     clearSelection();
     markModified();
+    updateMarkdownRendering();
   }
 }
 
@@ -3443,6 +3851,14 @@ void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
                                     delta.startCol);
       break;
     }
+    case EditDelta::REPLACE_LINE:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, // Add newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0, delta.startLine,
+                                    delta.startCol);
+      break;
+    }
     }
   }
   else
@@ -3484,6 +3900,14 @@ void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
       syntaxHighlighter->notifyEdit(start_byte, 0, 1, delta.startLine,
                                     delta.startCol, delta.startLine,
                                     delta.startCol, delta.startLine + 1, 0);
+      break;
+    }
+    case EditDelta::REPLACE_LINE:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, // Add newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0, delta.startLine,
+                                    delta.startCol);
       break;
     }
     }
@@ -3552,4 +3976,15 @@ void Editor::forceSyntaxResync()
   // Schedule a background full reparse to fix any inconsistencies
   syntaxHighlighter->scheduleBackgroundParse(buffer);
 #endif
+}
+
+void Editor::updateMarkdownRendering()
+{
+  if (!syntaxHighlighter || !markdownRenderer_)
+    return;
+
+  if (syntaxHighlighter->getCurrentLanguage() == "markdown")
+  {
+    markdownRenderer_->updateState(buffer, syntaxHighlighter->getTree());
+  }
 }

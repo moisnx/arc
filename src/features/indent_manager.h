@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #ifdef TREE_SITTER_ENABLED
 
 #include "query_manager.h"
@@ -7,8 +8,6 @@
 #include <iostream>
 #include <string>
 #include <tree_sitter/api.h>
-#include <unordered_map>
-#include <vector>
 
 /**
  * IndentManager - Calculates indentation using Tree-sitter indent queries
@@ -152,7 +151,7 @@ public:
 
     while (!ts_node_is_null(current))
     {
-      int node_delta = getIndentDeltaForNode(current, buffer, lineNum, true);
+      int node_delta = getIndentDeltaForNode(current, lineNum, true);
       indent_level += node_delta;
 
       if (debug_ && node_delta != 0)
@@ -198,7 +197,7 @@ public:
     // Get byte position at start of line (after any whitespace)
     std::string line = buffer.getLine(lineNum);
     int first_non_space = 0;
-    while (first_non_space < line.length() &&
+    while (first_non_space < static_cast<long>(line.length()) &&
            (line[first_non_space] == ' ' || line[first_non_space] == '\t'))
     {
       first_non_space++;
@@ -221,7 +220,7 @@ public:
 
     while (!ts_node_is_null(parent))
     {
-      int delta = getIndentDeltaForNode(parent, buffer, lineNum, false);
+      int delta = getIndentDeltaForNode(parent, lineNum, false);
       target_indent_level += delta;
 
       // For Python and similar, check if parent is a block that should dedent
@@ -332,8 +331,7 @@ private:
    * Get indent delta for a specific node
    * after_newline: true when calculating indent for new line, false for dedent
    */
-  int getIndentDeltaForNode(TSNode node, const GapBuffer &buffer,
-                            int current_line, bool after_newline)
+  int getIndentDeltaForNode(TSNode node, int current_line, bool after_newline)
   {
     if (!query_)
       return 0;
@@ -384,7 +382,7 @@ private:
         else if (cap.index == indent_dedent_idx_)
         {
           // Immediate dedent for this line
-          if (cap_start.row == current_line)
+          if (cap_start.row == static_cast<uint32_t>(current_line))
           {
             delta -= 1;
           }

@@ -1,4 +1,4 @@
-// src/core/editor_loop.cpp
+// src/core/editor_loop.cpp - Add injection reparsing
 #include "editor_loop.h"
 #include "config_manager.h"
 #include "editor.h"
@@ -43,15 +43,20 @@ EditorLoop::ExitReason EditorLoop::run(Editor &editor,
 
     was_highlighting_ready = is_highlighting_ready;
 
-    if (editor.getSyntaxHighlighter() &&
-        editor.getSyntaxHighlighter()->needsRedraw())
+    // Check if injections need reparsing (debounced, non-blocking)
+    if (auto *highlighter = editor.getSyntaxHighlighter())
     {
-      curs_set(0);
-      editor.display();
-      wnoutrefresh(stdscr);
-      doupdate();
-      editor.positionCursor();
-      curs_set(1);
+      highlighter->reparseInjectionsIfNeeded();
+
+      if (highlighter->needsRedraw())
+      {
+        curs_set(0);
+        editor.display();
+        wnoutrefresh(stdscr);
+        doupdate();
+        editor.positionCursor();
+        curs_set(1);
+      }
     }
 
     int key = getch();

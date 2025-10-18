@@ -2,6 +2,7 @@
 #define EDITOR_H
 
 #include "src/features/indent_manager.h"
+#include "src/features/markdown_renderer.h"
 #include <memory>
 #include <stack>
 #include <string>
@@ -25,6 +26,13 @@ struct EditorState
   int cursorCol;
   int viewportTop;
   int viewportLeft;
+};
+
+enum class UnsavedModalResult
+{
+  SAVE_AND_QUIT,     // User chose to save
+  QUIT_WITHOUT_SAVE, // User chose to quit without saving
+  CANCEL             // User cancelled (ESC)
 };
 
 enum CursorMode
@@ -62,12 +70,28 @@ public:
   bool loadFile(const std::string &fname);
   bool saveFile();
   void display();
+  UnsavedModalResult displayUnsavedChangesModal();
   void drawStatusBar();
   void handleResize();
   void handleMouse(MEVENT &event);
 
   std::string getFilename() const { return filename; }
   std::string getFirstLine() const { return buffer.getLine(0); }
+  void toggleMarkdownRendering()
+  {
+    if (markdownRenderer_)
+    {
+      markdownRenderer_->setEnabled(!markdownRenderer_->isEnabled());
+      updateMarkdownRendering();
+    }
+  }
+
+  MarkdownRenderer *getMarkdownRenderer() { return markdownRenderer_.get(); }
+
+  bool isMarkdownRenderingEnabled() const
+  {
+    return markdownRenderer_ ? markdownRenderer_->isEnabled() : false;
+  }
 
   bool setFileLang(std::string language)
   {
@@ -167,6 +191,11 @@ public:
   }
   bool getIsBinary() const { return isBinaryFile; }
   void displayBinaryWarning();
+  void displayImageViewer();
+  void displayImageViewerUnicode();
+  void displayImageViewerRawMode();
+  void displayImageError(const std::string &message);
+  bool isImageFile(const std::string &path) const;
 
 private:
   // Core data
@@ -249,6 +278,15 @@ private:
   bool shouldTriggerDedent(char ch); // NEW: Language-aware dedent triggers
 
   bool isBinaryFile = false;
+  // std::unique_ptr<ImageRenderer> image_renderer_;
+  // bool is_image_file_;
+
+  // In editor.cpp constructor - initialize:
+  // image_renderer_ = std::make_unique<ImageRenderer>();
+  // is_image_file_ = false;
+
+  std::unique_ptr<MarkdownRenderer> markdownRenderer_;
+  void updateMarkdownRendering();
 };
 
 #endif // EDITOR_H

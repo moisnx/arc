@@ -33,17 +33,24 @@ public:
 
   // Enable/disable specific key categories
   void setMouseEnabled(bool enabled) { mouse_enabled_ = enabled; }
+  void displayStatusMessage(const std::string &message);
+  void showHelpScreen();
 
 private:
   Editor &editor_;
   bool mouse_enabled_;
+
+  // Sequence
+  int pending_sequence_key_ = 0;
+  std::optional<InputHandler::KeyResult> handleKeySequence(int first_key,
+                                                           int second_key);
 
   // Special input types
   KeyResult handleMouseEvent();
   KeyResult handleResizeEvent();
 
   // Movement and editing
-  bool handleMovementKey(int key, bool shift_held);
+  bool handleMovementKey(int key);
   bool handleEditingKey(int key);
   std::optional<KeyResult> handleGlobalShortcut(int key);
 

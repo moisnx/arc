@@ -3,178 +3,169 @@
 
 languages:
   html:
-    name: "HTML"
-    extensions: ['html']
+    name: "html"
+    extensions: ["html"]
     parser_name: "html"
-    queries: ["runtime/queries/html/highlights.scm"]
-
+    queries:
+      [
+        "runtime/queries/html/highlights.scm",
+        "runtime/queries/html/injections.scm",
+      ]
   css:
-    name: "CSS"
-    extensions: ['css']
+    name: "css"
+    extensions: ["css"]
     parser_name: "css"
     queries: ["runtime/queries/css/highlights.scm"]
-    
+
+  javascript:
+    name: "javascript"
+    extensions: ["js", "mjs", "jsx"]
+    parser_name: "javascript"
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_javascript/highlights.scm",
+        "runtime/queries/_jsx/highlights.scm",
+      ]
+
   c:
-    name: "C"
+    name: "c"
     extensions: ["c", "h"]
     parser_name: "c"
     queries: ["runtime/queries/c/highlights.scm"]
-    
+
   cpp:
-    name: "C++"
+    name: "cpp"
     extensions: ["cpp", "cc", "cxx", "hpp", "hxx"]
     parser_name: "cpp"
-    queries: ["runtime/queries/c/highlights.scm", "runtime/queries/cpp/highlights.scm"]
-    
+    queries:
+      ["runtime/queries/c/highlights.scm", "runtime/queries/cpp/highlights.scm"]
+
   python:
-    name: "Python"
+    name: "python"
     extensions: ["py", "pyw", "pyi"]
     aliases: ["python", "python3", "pipenv"]
     parser_name: "python"
     queries: ["runtime/queries/python/highlights.scm"]
-    
+
   rust:
-    name: "Rust"
+    name: "rust"
     extensions: ["rs"]
     parser_name: "rust"
     queries: ["runtime/queries/rust/highlights.scm"]
-    
+
   markdown:
-    name: "Markdown"
+    name: "markdown"
     extensions: ["md", "markdown", "mdown", "mkd"]
     builtin: true
     parser_name: "markdown"
-    queries: ["runtime/queries/markdown/highlights.scm", "runtime/queries/markdown/injections.scm"]
-    
-  javascript:
-    name: "JavaScript"
-    extensions: ["js", "mjs", "jsx"]
-    parser_name: "javascript"
-    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_javascript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
+    queries:
+      [
+        "runtime/queries/markdown/highlights.scm",
+        "runtime/queries/markdown/injections.scm",
+      ]
+
+  markdown_inline:
+    name: "markdown.inline"
+    builtin: true
+    parser_name: "markdown_inline"
+    queries:
+      [
+        "runtime/queries/markdown.inline/highlights.scm",
+        "runtime/queries/markdown.inline/injections.scm",
+      ]
 
   typescript:
-    name: "TypeScript"
+    name: "typescript"
     extensions: ["ts"]
     parser_name: "typescript"
-    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm"]
-  
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_typescript/highlights.scm",
+      ]
+
   tsx:
-    name: "Tsx"
+    name: "tsx"
     extensions: ["tsx"]
     parser_name: "tsx"
-    queries: ["runtime/queries/ecma/highlights.scm", "runtime/queries/_typescript/highlights.scm", "runtime/queries/_jsx/highlights.scm"]
-  
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_typescript/highlights.scm",
+        "runtime/queries/_jsx/highlights.scm",
+      ]
+
   zig:
-    name: "Zig"
+    name: "zig"
     extensions: ["zig", "zir", "zigr", "zon"]
     parser_name: "zig"
     queries: ["runtime/queries/zig/highlights.scm"]
 
   go:
-    name: "Go"
+    name: "go"
     extensions: ["go"]
     parser_name: "go"
     queries: ["runtime/queries/go/highlights.scm"]
-  
-  ruby: 
-    name: "Ruby"
+
+  ruby:
+    name: "ruby"
     extensions: ["rb"]
     aliases: ["ruby", "jruby"]
     parser_name: "ruby"
     queries: ["runtime/queries/ruby/highlights.scm"]
-  
-  bash: 
-    name: "Bash"
+
+  bash:
+    name: "bash"
     extensions: ["sh", "bashrc", "zshrc"]
-    aliases: ["bash", "sh", "zsh"]
+    aliases: ["bash", "sh", "zsh", "console"]
     parser_name: "bash"
     queries: ["runtime/queries/bash/highlights.scm"]
-  
+
   yaml:
-   name: "Yaml"
-   extensions: ["yaml", "yml"]
-   parser_name: "yaml"
-   queries: ["runtime/queries/yaml/highlights.scm"]
+    name: "yaml"
+    extensions: ["yaml", "yml"]
+    parser_name: "yaml"
+    queries: ["runtime/queries/yaml/highlights.scm"]
 
   toml:
-   name: "Toml"
-   extensions: ["toml"]
-   parser_name: "toml"
-   queries: ["runtime/queries/toml/highlights.scm"]
-  
+    name: "toml"
+    extensions: ["toml"]
+    parser_name: "toml"
+    queries: ["runtime/queries/toml/highlights.scm"]
+
   json:
-   name: "JSON"
-   extensions: ["json"]
-   parser_name: "json"
-   queries: ["runtime/queries/json/highlights.scm"]
+    name: "json"
+    extensions: ["json"]
+    parser_name: "json"
+    queries: ["runtime/queries/json/highlights.scm"]
 
   lua:
-    name: "Lua"
-    extensions: ["lua"]  
+    name: "lua"
+    extensions: ["lua"]
     parser_name: "lua"
     builtin: true
     queries: ["runtime/queries/lua/highlights.scm"]
-  
+
   cmake:
-    name: "CMake"
+    name: "cmake"
     extensions: ["cmake"]
-    # KEY ADDITION: Filename patterns for CMake
     filenames: ["CMakeLists.txt", "CMakeCache.txt"]
     parser_name: "cmake"
     builtin: true
     queries: ["runtime/queries/cmake/highlights.scm"]
 
   make:
-    name: "Make"
+    name: "make"
     extensions: ["make", "makefile"]
-    # KEY ADDITION: Filename patterns for Make
-    filenames: ["Makefile","makefile", "GNUmakefile", "BSDmakefile"]
+    filenames: ["Makefile", "makefile", "GNUmakefile", "BSDmakefile"]
     parser_name: "make"
     builtin: true
     queries: ["runtime/queries/make/highlights.scm"]
 
-  # dockerfile:
-  #   name: "Dockerfile"
-  #   extensions: ["dockerfile"]
-  #   # Dockerfile without extension
-  #   filenames:
-  #     - "Dockerfile"
-  #     - "dockerfile"
-  #   parser_name: "dockerfile"
-  #   queries:
-  #     - "runtime/queries/dockerfile/highlights.scm"
-
-  # gitignore:
-  #   name: "Gitignore"
-  #   extensions: ["gitignore"]
-  #   # Git-related files
-  #   filenames:
-  #     - ".gitignore"
-  #     - ".gitattributes"
-  #     - ".gitconfig"
-  #   parser_name: "gitignore"
-  #   queries:
-  #     - "runtime/queries/gitignore/highlights.scm"
-
-  # nginx:
-  #   name: "Nginx"
-  #   extensions: ["conf"]
-  #   # Nginx config files without extension
-  #   filenames:
-  #     - "nginx.conf"
-  #     - "nginx"
-  #   parser_name: "nginx"
-  #   queries:
-  #     - "runtime/queries/nginx/highlights.scm"
-
-  # properties:
-  #   name: "Properties"
-  #   extensions: ["properties", "gradle"]
-  #   # Java/Gradle properties files
-  #   filenames:
-  #     - "gradle.properties"
-  #     - "build.properties"
-  #     - ".properties"
-  #   parser_name: "properties"
-  #   queries:
-  #     - "runtime/queries/properties/highlights.scm"
+  powershell:
+    name: "powershell"
+    extensions: ["ps1", "psm1", "psd1"]
+    parser_name: "powershell"
+    builtin: true
+    queries: ["runtime/queries/powershell/highlights.scm"]
