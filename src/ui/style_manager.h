@@ -164,6 +164,7 @@ public:
   void initialize();
   bool load_theme_from_file(const std::string &file_path);
   bool load_theme_from_yaml(const std::string &yaml_content);
+  // const SemanticTheme &getCurrentTheme() const { return current_theme; }
 
   // Theme access
   const SemanticTheme &get_current_theme() const { return current_theme; }

@@ -1,7 +1,5 @@
-// src/core/application.cpp
 #include "application.h"
 #include "config_manager.h"
-// #include "src/core/logger.h"
 #include "src/ui/style_manager.h"
 #include <filesystem>
 #include <iostream>

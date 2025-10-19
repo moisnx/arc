@@ -4,11 +4,15 @@
 #include "src/core/config_manager.h"
 #include "src/core/editor.h"
 #include "src/core/editor_loop.h"
-#include "src/core/file_browser.h"
 #include "src/features/syntax_highlighter.h"
-#include "src/ui/browser_renderer.h"
+#include "src/ui/flux_theme_bridge.h"
 #include "src/ui/input_handler.h"
 #include "src/ui/style_manager.h"
+
+// Flux integration
+#include <flux/core/browser.h>
+#include <flux/ui/renderer.h>
+
 #include <iostream>
 
 #ifdef _WIN32
@@ -21,11 +25,13 @@
 
 int BrowserMode::run(const std::string &folder_path)
 {
+  // Step 1: Initialize Arc's application and style system FIRST
   if (!Application::initialize())
   {
     return 1;
   }
 
+  // Step 2: Load Arc's theme - this sets up all COLOR_PAIR() indices (0-79)
   std::string active_theme = ConfigManager::getActiveTheme();
   std::string theme_file = ConfigManager::getThemeFile(active_theme);
   if (!theme_file.empty())
@@ -35,9 +41,24 @@ int BrowserMode::run(const std::string &folder_path)
 
   Application::setupMouse();
 
-  FileBrowser browser(folder_path);
-  BrowserRenderer renderer;
-  renderer.setIconStyle(IconStyle::AUTO);
+  // Step 3: Initialize Flux with Arc's existing color pairs
+  flux::Browser browser(folder_path);
+  flux::Renderer renderer;
+
+  // CRITICAL: Use the bridge to tell Flux which COLOR_PAIR indices to use
+  // This does NOT create new pairs - Flux will use Arc's pre-configured ones
+  flux::Theme fluxTheme = arc::FluxThemeBridge::createFluxThemeFromArc();
+  renderer.setTheme(fluxTheme);
+
+  // Debug: Show what pairs we're using (remove in production)
+  // arc::FluxThemeBridge::debugPrintMapping();
+
+  // Set the terminal background to Arc's background pair
+  // This ensures the entire screen uses Arc's theme consistently
+  bkgd(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+
+  // IMPORTANT: Don't let Flux override this with its own background
+  // The renderer should respect Arc's background setting
 
   if (!ConfigManager::startWatchingConfig())
   {
@@ -47,7 +68,16 @@ int BrowserMode::run(const std::string &folder_path)
   bool running = true;
   while (running)
   {
-    browser.updateScroll(renderer.getViewportHeight());
+    int maxY, maxX;
+    getmaxyx(stdscr, maxY, maxX);
+    int viewportHeight = maxY - 2;
+
+    browser.updateScroll(viewportHeight);
+
+    // Before rendering, ensure background is still set correctly
+    // (in case Flux tries to change it)
+    bkgd(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+
     renderer.render(browser);
 
     int key = getch();
@@ -72,11 +102,11 @@ int BrowserMode::run(const std::string &folder_path)
       break;
     case KEY_PPAGE:
     case CTRL('b'):
-      browser.pageUp(renderer.getViewportHeight());
+      browser.pageUp(viewportHeight);
       break;
     case KEY_NPAGE:
     case CTRL('f'):
-      browser.pageDown(renderer.getViewportHeight());
+      browser.pageDown(viewportHeight);
       break;
     case KEY_LEFT:
     case 'h':
@@ -98,6 +128,8 @@ int BrowserMode::run(const std::string &folder_path)
       running = false;
       break;
     case KEY_RESIZE:
+      // Re-apply background after resize
+      bkgd(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
       break;
 
     case KEY_RIGHT:
@@ -111,10 +143,9 @@ int BrowserMode::run(const std::string &folder_path)
       }
       else
       {
-        auto path = browser.getSelectedPath();
-        if (!path.has_value())
-          break;
+        std::string selectedPath = browser.getSelectedPath()->string();
 
+        // Clean up Flux UI before transitioning to editor
         Application::cleanup();
 
         SyntaxHighlighter syntaxHighlighter;
@@ -132,12 +163,13 @@ int BrowserMode::run(const std::string &folder_path)
         editor.setDeltaUndoEnabled(true);
         editor.beginDeltaGroup();
 
-        if (!editor.loadFile(path.value().string()))
+        if (!editor.loadFile(selectedPath))
         {
-          std::cerr << "Failed to load: " << path.value() << std::endl;
+          std::cerr << "Failed to load: " << selectedPath << std::endl;
           return 1;
         }
 
+        // Reinitialize Arc's system for editor
         if (!Application::initialize())
         {
           return 1;
@@ -169,7 +201,27 @@ int BrowserMode::run(const std::string &folder_path)
 
         Application::cleanup();
 
-        if (exit_reason == EditorLoop::ExitReason::QUIT)
+        // If returning to browser, need to reinitialize Arc and Flux
+        if (exit_reason != EditorLoop::ExitReason::QUIT)
+        {
+          if (!Application::initialize())
+          {
+            return 1;
+          }
+          if (!theme_file.empty())
+          {
+            g_style_manager.load_theme_from_file(theme_file);
+          }
+          Application::setupMouse();
+
+          // Re-apply Flux theme with Arc's color pairs
+          fluxTheme = arc::FluxThemeBridge::createFluxThemeFromArc();
+          renderer.setTheme(fluxTheme);
+
+          // Critical: Set background again after returning from editor
+          bkgd(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+        }
+        else
         {
           break;
         }

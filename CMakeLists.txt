@@ -286,6 +286,8 @@ list(APPEND EFSW_SOURCES
 
 
 
+
+
 # Conditionally add the correct platform backend
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     list(APPEND EFSW_SOURCES
@@ -345,6 +347,34 @@ if(EFSW_SOURCES)
 else()
     message(WARNING "EFSW sources missing. Live reload feature disabled.")
     set(EFSW_LIBRARIES "")
+endif()
+
+# ----------------------------------------
+# FLUX
+# -----------------------------
+
+set(FLUX_BASE_DIR ${DEPS_DIR}/flux)
+
+if(EXISTS ${FLUX_BASE_DIR}/CMakeLists.txt)
+    message(STATUS "Found Flux at ${FLUX_BASE_DIR}")
+
+    # Disable Flux's install configuration and standalone binary
+    # We only want the library
+    set(FLUX_BUILD_STANDALONE OFF CACHE BOOL "Build standalone fx binary" FORCE)
+    set(FLUX_BUILD_EXAMPLES OFF CACHE BOOL "Build examples" FORCE)
+    set(FLUX_INSTALL_ENABLED OFF CACHE BOOL "Enable install targets" FORCE)
+
+    # Add Flux as a subdirectory
+    # This will build the flux library
+    add_subdirectory(${FLUX_BASE_DIR} ${CMAKE_BINARY_DIR}/flux EXCLUDE_FROM_ALL)
+
+    message(STATUS "Added Flux library from deps folder")
+    set(FLUX_LIBRARIES flux)
+    set(FLUX_INCLUDE_DIRS ${FLUX_BASE_DIR}/include)
+else()
+    message(WARNING "Flux not found at ${FLUX_BASE_DIR}. File browser features will be limited.")
+    set(FLUX_LIBRARIES "")
+    set(FLUX_INCLUDE_DIRS "")
 endif()
 
 # ----------------------------------------------------
@@ -460,12 +490,12 @@ set(SOURCES
     src/core/editor.cpp
     src/core/buffer.cpp
     src/core/config_manager.cpp
-    src/core/file_browser.cpp
+    # src/core/file_browser.cpp
     src/core/signals/signal_handler.cpp
     src/ui/input_handler.cpp
     src/ui/style_manager.cpp
     src/ui/icon_provider.cpp
-    src/ui/browser_renderer.cpp
+    # src/ui/browser_renderer.cpp
     src/features/syntax_config_loader.cpp
     src/features/syntax_highlighter.cpp
     src/features/injection_manager.cpp
@@ -709,6 +739,7 @@ target_link_libraries(arc PRIVATE
     ${CURSES_LIBRARIES}
     ${TS_LIBRARIES}
     ${EFSW_LIBRARIES}
+    ${FLUX_LIBRARIES}
 )
 
 if(WIN32)
@@ -725,6 +756,7 @@ target_include_directories(arc PRIVATE
     .
     ${CURSES_INCLUDE_DIRS}
     ${TS_INCLUDES}
+    ${FLUX_INCLUDE_DIRS}
 )
 
 # Add generated headers directory if Tree-sitter is enabled
