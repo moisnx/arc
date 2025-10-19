@@ -85,3 +85,6 @@
 [submodule "deps/grammars/tree-sitter-powershell"]
 	path = deps/grammars/tree-sitter-powershell
 	url = https://github.com/airbus-cert/tree-sitter-powershell
+[submodule "deps/flux"]
+	path = deps/flux
+	url = https://github.com/moisnx/flux
