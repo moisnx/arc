@@ -2,7 +2,6 @@
 #include "src/core/application.h"
 #include "src/core/args_parser.h"
 #include "src/core/config_manager.h"
-// #include "src/core/logger.h"
 #include "src/core/signals/signal_handler.h"
 #include "src/features/query_manager.h"
 #include "src/modes/browser_mode.h"

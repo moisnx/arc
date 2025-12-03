@@ -1,5 +1,4 @@
 #include "editor.h"
-// #include "src/ui/colors.h"
 #include "src/core/clipboard.h"
 #include "src/core/config_manager.h"
 #include "src/features/indent_manager.h"
@@ -283,7 +282,6 @@ void Editor::positionCursor()
       move(screenRow, contentStartCol);
     }
   }
-  // REMOVED: All #ifdef _WIN32 refresh() calls
 }
 
 bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
@@ -374,7 +372,6 @@ void Editor::displayBinaryWarning()
   int centerRow = rows / 2 - 4;
   int centerCol = cols / 2;
 
-  // Modern card-style warning with gradient effect
 
   // Top border with ERROR color
   attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
@@ -829,7 +826,6 @@ void Editor::display()
 
   int endLine = std::min(viewportTop + viewportHeight, buffer.getLineCount());
 
-  // OPTIMIZATION: Pre-mark viewport lines for priority parsing
   if (syntaxHighlighter)
   {
     syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
@@ -877,11 +873,11 @@ void Editor::display()
       addch(' ');
     }
 
-    // Get raw line content
+   
     std::string rawLine = buffer.getLine(i);
     std::string expandedLine = expandTabs(rawLine, currentTabSize);
 
-    // NEW: Check if we should apply Markdown rendering
+   
     std::string displayLine = expandedLine;
     std::vector<ColorSpan> markdownSpans;
     int leftPadding = 0;

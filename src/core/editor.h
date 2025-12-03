@@ -270,20 +270,14 @@ private:
 
   void autoIndentCurrentLine();
   void adjustIndentForClosingBracket();
-  void adjustIndentForPythonDedent(); // NEW: Python-specific
+  void adjustIndentForPythonDedent(); 
   bool isLineOnlyWhitespace(const std::string &line);
   std::string getIndentString(int spaces);
   int countIndentSpaces(const std::string &line);
   void pasteWithSmartIndent(const std::string &text);
-  bool shouldTriggerDedent(char ch); // NEW: Language-aware dedent triggers
+  bool shouldTriggerDedent(char ch); 
 
   bool isBinaryFile = false;
-  // std::unique_ptr<ImageRenderer> image_renderer_;
-  // bool is_image_file_;
-
-  // In editor.cpp constructor - initialize:
-  // image_renderer_ = std::make_unique<ImageRenderer>();
-  // is_image_file_ = false;
 
   std::unique_ptr<MarkdownRenderer> markdownRenderer_;
   void updateMarkdownRendering();
