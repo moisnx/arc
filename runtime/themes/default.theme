@@ -1,0 +1,63 @@
+# semantic.theme - GitHub Dark inspired
+name: "GitHub Dark (Semantic)"
+
+# Core colors
+background: "transparent"
+foreground: "#C9D1D9"
+
+# State colors - reusable across ALL UI components
+state_active: "#58A6FF"      # Focused/active element (tabs, inputs, selections)
+state_selected: "#264F78"    # Selected items (file browser, search results)
+state_hover: "#161B22"       # Hover/highlight (current line, hover state)
+state_disabled: "#6E7681"    # Disabled/dimmed elements
+
+# Semantic UI colors - reusable by meaning
+ui_primary: "#58A6FF"        # Primary actions, links, important buttons
+ui_secondary: "#8B949E"      # Secondary text, metadata, less important info
+ui_accent: "#D2A8FF"         # Special items, decorators, unique elements
+ui_success: "#7EE787"        # Success states, executables, positive actions
+ui_warning: "#E3B341"        # Warnings, modified indicators, caution
+ui_error: "#FF7B72"          # Errors, dangerous actions, critical issues
+ui_info: "#79C0FF"           # Info, directories, neutral metadata
+ui_border: "#30363D"         # Borders, separators, dividers
+
+# Editor-specific
+cursor: "#FFFFFF"
+line_numbers: "#6E7681"
+line_numbers_active: "#C9D1D9"
+line_highlight: "#161B22"
+
+# Status bar
+status_bar_bg: "#21262D"
+status_bar_fg: "#C9D1D9"
+status_bar_active: "#58A6FF"
+
+# Syntax highlighting (semantic, not prescriptive)
+keyword: "#FF7B72"
+string_literal: "#7EE787"
+number: "#D2A8FF"
+comment: "#8B949E"
+function_name: "#D2A8FF"
+variable: "#C9D1D9"
+type: "#79C0FF"
+operator: "#FF7B72"
+punctuation: "#C9D1D9"
+constant: "#79C0FF"
+namespace: "#79C0FF"
+property: "#C9D1D9"
+decorator: "#D2A8FF"
+macro: "#FF7B72"
+label: "#FF7B72"
+
+# Markup
+markup_heading: "#FF7B72"
+markup_bold: "#C9D1D9"
+markup_italic: "#7EE787"
+markup_code: "#D2A8FF"
+markup_code_block: "#D2A8FF"
+markup_link: "#58A6FF"
+markup_url: "#58A6FF"
+markup_list: "#7EE787"
+markup_blockquote: "#8B949E"
+markup_strikethrough: "#FF6B6B"
+markup_quote: "#8B949E"

@@ -1,0 +1,62 @@
+name: "Monokai"
+
+# Core colors
+background: "#272822"
+foreground: "#F8F8F2"
+
+# State colors
+state_active: "#A6E22E"
+state_selected: "#49483E"
+state_hover: "#383830"
+state_disabled: "#90908A"
+
+# Semantic UI colors
+ui_primary: "#66D9EF"
+ui_secondary: "#75715E"
+ui_accent: "#AE81FF"
+ui_success: "#A6E22E"
+ui_warning: "#E6DB74"
+ui_error: "#F92672"
+ui_info: "#66D9EF"
+ui_border: "#49483E"
+
+# Editor-specific
+cursor: "#F8F8F0"
+line_numbers: "#90908A"
+line_numbers_active: "#F8F8F2"
+line_highlight: "#383830"
+
+# Status bar
+status_bar_bg: "#49483E"
+status_bar_fg: "#F8F8F0"
+status_bar_active: "#A6E22E"
+
+# Syntax highlighting
+keyword: "#F92672"
+string_literal: "#E6DB74"
+number: "#AE81FF"
+comment: "#75715E"
+function_name: "#A6E22E"
+variable: "#F8F8F2"
+type: "#66D9EF"
+operator: "#F92672"
+punctuation: "#F8F8F2"
+constant: "#66D9EF"
+namespace: "#66D9EF"
+property: "#F8F8F2"
+decorator: "#A6E22E"
+macro: "#F92672"
+label: "#F92672"
+
+# Markup
+markup_heading: "#F92672"
+markup_bold: "#F8F8F2"
+markup_italic: "#E6DB74"
+markup_code: "#A6E22E"
+markup_code_block: "#A6E22E"
+markup_link: "#66D9EF"
+markup_url: "#66D9EF"
+markup_list: "#E6DB74"
+markup_blockquote: "#75715E"
+markup_strikethrough: "#F92672"
+markup_quote: "#75715E"

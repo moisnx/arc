@@ -1,0 +1,62 @@
+name: "Solarized Dark"
+
+# Core colors
+background: "#002B36"
+foreground: "#839496"
+
+# State colors
+state_active: "#2AA198"
+state_selected: "#073642"
+state_hover: "#073642"
+state_disabled: "#586E75"
+
+# Semantic UI colors
+ui_primary: "#268BD2"
+ui_secondary: "#586E75"
+ui_accent: "#D33682"
+ui_success: "#859900"
+ui_warning: "#B58900"
+ui_error: "#DC322F"
+ui_info: "#2AA198"
+ui_border: "#073642"
+
+# Editor-specific
+cursor: "#93A1A1"
+line_numbers: "#586E75"
+line_numbers_active: "#93A1A1"
+line_highlight: "#073642"
+
+# Status bar
+status_bar_bg: "#073642"
+status_bar_fg: "#839496"
+status_bar_active: "#2AA198"
+
+# Syntax highlighting
+keyword: "#268BD2"
+string_literal: "#2AA198"
+number: "#D33682"
+comment: "#586E75"
+function_name: "#B58900"
+variable: "#839496"
+type: "#859900"
+operator: "#CB4B16"
+punctuation: "#839496"
+constant: "#859900"
+namespace: "#859900"
+property: "#839496"
+decorator: "#B58900"
+macro: "#CB4B16"
+label: "#268BD2"
+
+# Markup
+markup_heading: "#268BD2"
+markup_bold: "#93A1A1"
+markup_italic: "#2AA198"
+markup_code: "#859900"
+markup_code_block: "#859900"
+markup_link: "#268BD2"
+markup_url: "#268BD2"
+markup_list: "#2AA198"
+markup_blockquote: "#586E75"
+markup_strikethrough: "#DC322F"
+markup_quote: "#586E75"

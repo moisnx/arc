@@ -1,13 +1,16 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
+#include "src/features/indent_manager.h"
+#include "src/features/markdown_renderer.h"
+#include <memory>
 #include <stack>
 #include <string>
 
 #ifdef _WIN32
 #include <curses.h>
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
 
 #include "buffer.h"
@@ -25,6 +28,13 @@ struct EditorState
   int viewportLeft;
 };
 
+enum class UnsavedModalResult
+{
+  SAVE_AND_QUIT,     // User chose to save
+  QUIT_WITHOUT_SAVE, // User chose to quit without saving
+  CANCEL             // User cancelled (ESC)
+};
+
 enum CursorMode
 {
   NORMAL,
@@ -35,18 +45,61 @@ enum CursorMode
 class Editor
 {
 public:
+  struct RenderSpan
+  {
+    int start;       // Screen column start
+    int end;         // Screen column end
+    int colorPair;   // Color pair to use
+    int attribute;   // Attribute flags
+    bool isSelected; // Whether this span is selected
+  };
+
+  std::vector<RenderSpan>
+  buildRenderSpans(const std::string &line,
+                   const std::vector<ColorSpan> &highlightSpans,
+                   bool lineHasSelection, int sel_start_line, int sel_end_line,
+                   int sel_start_col, int sel_end_col, int currentLine,
+                   int viewportLeft, int contentWidth);
+
   // Core API
   Editor(SyntaxHighlighter *highlighter);
+  // SyntaxHighlighter highlighter;
   void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
+
+  SyntaxHighlighter *getSyntaxHighlighter() { return syntaxHighlighter; }
   bool loadFile(const std::string &fname);
   bool saveFile();
   void display();
+  UnsavedModalResult displayUnsavedChangesModal();
   void drawStatusBar();
   void handleResize();
   void handleMouse(MEVENT &event);
 
   std::string getFilename() const { return filename; }
   std::string getFirstLine() const { return buffer.getLine(0); }
+  void toggleMarkdownRendering()
+  {
+    if (markdownRenderer_)
+    {
+      markdownRenderer_->setEnabled(!markdownRenderer_->isEnabled());
+      updateMarkdownRendering();
+    }
+  }
+
+  MarkdownRenderer *getMarkdownRenderer() { return markdownRenderer_.get(); }
+
+  bool isMarkdownRenderingEnabled() const
+  {
+    return markdownRenderer_ ? markdownRenderer_->isEnabled() : false;
+  }
+
+  bool setFileLang(std::string language)
+  {
+    filelang = language;
+    return true;
+  }
+  std::string getFileLang() const { return filelang; }
+
   GapBuffer getBuffer() { return buffer; }
 
   // Movement
@@ -126,12 +179,32 @@ public:
   size_t getUndoMemoryUsage() const;
   size_t getRedoMemoryUsage() const;
 
+  // Indentation
+  void insertTextAtCursor(const std::string &text);
+  int removePreviousIndent(int amount);
+
+  void forceSyntaxResync();
+
+  bool isSyntaxHihglightingReady() const
+  {
+    return syntaxHighlighter ? syntaxHighlighter->isReady() : false;
+  }
+  bool getIsBinary() const { return isBinaryFile; }
+  void displayBinaryWarning();
+  void displayImageViewer();
+  void displayImageViewerUnicode();
+  void displayImageViewerRawMode();
+  void displayImageError(const std::string &message);
+  bool isImageFile(const std::string &path) const;
+
 private:
   // Core data
   GapBuffer buffer;
   std::string filename;
   SyntaxHighlighter *syntaxHighlighter;
+  std::unique_ptr<IndentManager> indentManager_;
   bool isSaving = false;
+  std::unique_ptr<SyntaxConfigLoader> config_loader_;
 
   // Delta
   bool useDeltaUndo_ = false; // Feature flag - start disabled!
@@ -157,6 +230,9 @@ private:
   int cursorLine = 0;
   int cursorCol = 0;
 
+  std::string filelang = "text";
+
+  bool isPasting_ = false;
   // Clipboard
   std::string clipboard;
 
@@ -191,6 +267,20 @@ private:
 
   // Cursor Style
   CursorMode currentMode = NORMAL;
+
+  void autoIndentCurrentLine();
+  void adjustIndentForClosingBracket();
+  void adjustIndentForPythonDedent(); 
+  bool isLineOnlyWhitespace(const std::string &line);
+  std::string getIndentString(int spaces);
+  int countIndentSpaces(const std::string &line);
+  void pasteWithSmartIndent(const std::string &text);
+  bool shouldTriggerDedent(char ch); 
+
+  bool isBinaryFile = false;
+
+  std::unique_ptr<MarkdownRenderer> markdownRenderer_;
+  void updateMarkdownRendering();
 };
 
 #endif // EDITOR_H

@@ -1,0 +1,62 @@
+name: "Dracula"
+
+# Core colors
+background: "#282A36"
+foreground: "#F8F8F2"
+
+# State colors
+state_active: "#FF79C6"
+state_selected: "#44475A"
+state_hover: "#44475A"
+state_disabled: "#6272A4"
+
+# Semantic UI colors
+ui_primary: "#BD93F9"
+ui_secondary: "#6272A4"
+ui_accent: "#FF79C6"
+ui_success: "#50FA7B"
+ui_warning: "#F1FA8C"
+ui_error: "#FF5555"
+ui_info: "#8BE9FD"
+ui_border: "#44475A"
+
+# Editor-specific
+cursor: "#F8F8F0"
+line_numbers: "#6272A4"
+line_numbers_active: "#F8F8F2"
+line_highlight: "#44475A"
+
+# Status bar
+status_bar_bg: "#BD93F9"
+status_bar_fg: "#282A36"
+status_bar_active: "#FF79C6"
+
+# Syntax highlighting
+keyword: "#FF79C6"
+string_literal: "#F1FA8C"
+number: "#BD93F9"
+comment: "#6272A4"
+function_name: "#50FA7B"
+variable: "#F8F8F2"
+type: "#8BE9FD"
+operator: "#FF79C6"
+punctuation: "#F8F8F2"
+constant: "#8BE9FD"
+namespace: "#8BE9FD"
+property: "#F8F8F2"
+decorator: "#50FA7B"
+macro: "#FF79C6"
+label: "#FF79C6"
+
+# Markup
+markup_heading: "#FF79C6"
+markup_bold: "#F8F8F2"
+markup_italic: "#F1FA8C"
+markup_code: "#50FA7B"
+markup_code_block: "#50FA7B"
+markup_link: "#8BE9FD"
+markup_url: "#8BE9FD"
+markup_list: "#F1FA8C"
+markup_blockquote: "#6272A4"
+markup_strikethrough: "#FF5555"
+markup_quote: "#6272A4"

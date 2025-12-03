@@ -1,0 +1,62 @@
+name: "Solarized Light"
+
+# Core colors
+background: "#FDF6E3"
+foreground: "#657B83"
+
+# State colors
+state_active: "#2AA198"
+state_selected: "#EEE8D5"
+state_hover: "#EEE8D5"
+state_disabled: "#93A1A1"
+
+# Semantic UI colors
+ui_primary: "#268BD2"
+ui_secondary: "#93A1A1"
+ui_accent: "#D33682"
+ui_success: "#859900"
+ui_warning: "#B58900"
+ui_error: "#DC322F"
+ui_info: "#2AA198"
+ui_border: "#EEE8D5"
+
+# Editor-specific
+cursor: "#586E75"
+line_numbers: "#93A1A1"
+line_numbers_active: "#586E75"
+line_highlight: "#EEE8D5"
+
+# Status bar
+status_bar_bg: "#EEE8D5"
+status_bar_fg: "#657B83"
+status_bar_active: "#2AA198"
+
+# Syntax highlighting
+keyword: "#268BD2"
+string_literal: "#2AA198"
+number: "#D33682"
+comment: "#93A1A1"
+function_name: "#B58900"
+variable: "#657B83"
+type: "#859900"
+operator: "#CB4B16"
+punctuation: "#657B83"
+constant: "#859900"
+namespace: "#859900"
+property: "#657B83"
+decorator: "#B58900"
+macro: "#CB4B16"
+label: "#268BD2"
+
+# Markup
+markup_heading: "#268BD2"
+markup_bold: "#586E75"
+markup_italic: "#2AA198"
+markup_code: "#859900"
+markup_code_block: "#859900"
+markup_link: "#268BD2"
+markup_url: "#268BD2"
+markup_list: "#2AA198"
+markup_blockquote: "#93A1A1"
+markup_strikethrough: "#DC322F"
+markup_quote: "#93A1A1"

@@ -1,21 +1,31 @@
 #include "editor.h"
-// #include "src/ui/colors.h"
+#include "src/core/clipboard.h"
 #include "src/core/config_manager.h"
+#include "src/features/indent_manager.h"
 #include "src/ui/style_manager.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iostream>
+#include <memory>
 #ifdef _WIN32
 #include <curses.h>
+#include <windows.h>
+#undef min
+#undef max
 #else
-#include <ncurses.h>
+#include <ncursesw/ncurses.h>
 #endif
+#include "src/utils/binary_detector.h"
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <utility>
+
+#ifndef _WIN32
+#include <termios.h>
+#include <unistd.h>
+#endif
 
 // Windows-specific mouse codes
 #ifndef BUTTON4_PRESSED
@@ -29,9 +39,27 @@
 // Constructor
 // =================================================================
 
+// Clipboard::Clipboard();
+
 Editor::Editor(SyntaxHighlighter *highlighter) : syntaxHighlighter(highlighter)
+
 {
   tabSize = ConfigManager::getTabSize();
+
+#ifdef TREE_SITTER_ENABLED
+  config_loader_ = std::make_unique<SyntaxConfigLoader>();
+  indentManager_ = std::make_unique<IndentManager>();
+  markdownRenderer_ = std::make_unique<MarkdownRenderer>();
+  // image_renderer_ = std::make_unique<ImageRenderer>();
+  // is_image_file_ = false;
+
+  markdownRenderer_->setEnabled(false);
+  indentManager_->setTabSize(tabSize);
+  // indentManager_->setDebugMode(true);
+  std::string syntax_dir = ConfigManager::getSyntaxRulesDir();
+
+  config_loader_->loadAllLanguageConfigs(syntax_dir);
+#endif
 }
 
 EditorSnapshot Editor::captureSnapshot() const
@@ -254,7 +282,6 @@ void Editor::positionCursor()
       move(screenRow, contentStartCol);
     }
   }
-  // REMOVED: All #ifdef _WIN32 refresh() calls
 }
 
 bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
@@ -333,8 +360,452 @@ void Editor::setSyntaxHighlighter(SyntaxHighlighter *highlighter)
   syntaxHighlighter = highlighter;
 }
 
+void Editor::displayBinaryWarning()
+{
+  int rows, cols;
+  getmaxyx(stdscr, rows, cols);
+
+  // Clear with background
+  attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+  clear();
+
+  int centerRow = rows / 2 - 4;
+  int centerCol = cols / 2;
+
+
+  // Top border with ERROR color
+  attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+  mvprintw(centerRow, centerCol - 25,
+           "╔═════════════════════════════════════════════════╗");
+  mvprintw(centerRow + 1, centerCol - 25, "║");
+  mvprintw(centerRow + 1, centerCol + 24, "║");
+  attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+  // Icon and title with WARNING color
+  attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+  mvprintw(centerRow + 1, centerCol - 10, "⚠️  BINARY FILE  ⚠️");
+  attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+  // Separator
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 2, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  // Main message with PRIMARY color
+  attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+  mvprintw(centerRow + 4, centerCol - 22,
+           "This file contains binary data that cannot");
+  mvprintw(centerRow + 5, centerCol - 22,
+           "be safely displayed or edited as text.");
+  attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+  // File info section
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 7, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  // Filename with ACCENT color
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 8, centerCol - 22, "File:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+  // Truncate long filenames
+  std::string displayName = filename;
+  if (displayName.length() > 40)
+  {
+    displayName = "..." + displayName.substr(displayName.length() - 37);
+  }
+  mvprintw(centerRow + 8, centerCol - 16, "%s", displayName.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+
+  // File type and size detection
+  std::string fileType = BinaryDetector::detectFileType(filename);
+  std::string fileSize = BinaryDetector::getFileSize(filename);
+
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 9, centerCol - 22, "Type:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_INFO));
+  mvprintw(centerRow + 9, centerCol - 16, "%s", fileType.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+  // Show file size
+  attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+  mvprintw(centerRow + 10, centerCol - 22, "Size:");
+  attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+  attron(COLOR_PAIR(ColorPairs::UI_INFO));
+  mvprintw(centerRow + 10, centerCol - 16, "%s", fileSize.c_str());
+  attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+  // Help text with DISABLED state color
+  attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+  mvprintw(centerRow + 12, centerCol - 25,
+           "╟─────────────────────────────────────────────────╢");
+  attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+  attron(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+  mvprintw(centerRow + 13, centerCol - 22,
+           "To edit this file, use a hex editor or");
+  mvprintw(centerRow + 14, centerCol - 22, "appropriate binary editing tool.");
+  attroff(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+  // Bottom border with ERROR color
+  attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+  mvprintw(centerRow + 15, centerCol - 25,
+           "╚═════════════════════════════════════════════════╝");
+  attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+  // Action hint at bottom with SUCCESS color
+  attron(COLOR_PAIR(ColorPairs::UI_SUCCESS));
+  mvprintw(rows - 3, centerCol - 15, "Press any key to continue...");
+  attroff(COLOR_PAIR(ColorPairs::UI_SUCCESS));
+
+  drawStatusBar();
+
+  wnoutrefresh(stdscr);
+  doupdate();
+}
+
+// =================================================================
+// Unsaved Changes Modal with Proper Overlay Effect
+// =================================================================
+
+UnsavedModalResult Editor::displayUnsavedChangesModal()
+{
+  if (!isModified)
+    return UnsavedModalResult::QUIT_WITHOUT_SAVE;
+
+  int rows, cols;
+  getmaxyx(stdscr, rows, cols);
+
+  // Draw the modal
+  auto drawModal = [&]()
+  {
+    // DON'T clear the screen - we want to show the editor content behind
+    // Just display the current editor state first
+    display();
+
+    int centerRow = rows / 2 - 6;
+    int centerCol = cols / 2;
+    int modalWidth = 56;
+    int modalLeft = centerCol - (modalWidth / 2);
+
+    // Draw semi-transparent dark overlay ONLY around the modal area
+    // Create a "dimmed" effect by drawing with a darker color pair
+    attrset(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+    // Draw overlay above modal
+    for (int i = 0; i < centerRow; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Draw overlay beside modal (left and right)
+    for (int i = centerRow; i < centerRow + 16; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < modalLeft; j++)
+      {
+        addch(' ');
+      }
+      for (int j = modalLeft + modalWidth; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Draw overlay below modal
+    for (int i = centerRow + 16; i < rows - 1; i++)
+    {
+      move(i, 0);
+      for (int j = 0; j < cols; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // Now draw the modal box with solid background
+    // Fill modal background
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+    for (int i = centerRow; i < centerRow + 16; i++)
+    {
+      move(i, modalLeft);
+      for (int j = 0; j < modalWidth; j++)
+      {
+        addch(' ');
+      }
+    }
+
+    // TOP BORDER with gradient effect
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow, modalLeft, "%lc", L'╔');
+    // FIX: Replaced addch(L'═') in loop with mvprintw(..., "%lc", L'═')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow, modalLeft + i, "%lc", L'═');
+    }
+    // FIX: Replaced addch(L'╗') with mvprintw(..., "%lc", L'╗')
+    mvprintw(centerRow, modalLeft + modalWidth - 1, "%lc", L'╗');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // ICON & TITLE ROW
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, centerCol - 10, "   UNSAVED CHANGES   ");
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 1, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // SEPARATOR
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 2, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 2, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 2, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // EMPTY LINE for spacing
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 3, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 3, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // MAIN MESSAGE
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 4, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+    mvprintw(centerRow + 4, centerCol - 19,
+             "Your changes will be lost if you quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 4, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Second line of message
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 5, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+    mvprintw(centerRow + 5, centerCol - 20,
+             "without saving. Do you want to continue?");
+    attroff(COLOR_PAIR(ColorPairs::UI_PRIMARY));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 5, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 6, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 6, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // FILE INFO SECTION
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 7, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 7, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 7, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Filename display
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 8, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+    mvprintw(centerRow + 8, modalLeft + 4, "File:");
+    attroff(COLOR_PAIR(ColorPairs::UI_SECONDARY));
+
+    std::string displayName = filename.empty() ? "[No Name]" : filename;
+    if (displayName.length() > 40)
+    {
+      displayName = "..." + displayName.substr(displayName.length() - 37);
+    }
+
+    attron(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+    mvprintw(centerRow + 8, modalLeft + 10, "%s", displayName.c_str());
+    attroff(COLOR_PAIR(ColorPairs::UI_ACCENT) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 8, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 9, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 9, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // ACTIONS SEPARATOR
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 10, modalLeft, "%lc", L'╟');
+    // FIX: Replaced addch(L'─') in loop with mvprintw(..., "%lc", L'─')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 10, modalLeft + i, "%lc", L'─');
+    }
+    // FIX: Replaced addch(L'╢') with mvprintw(..., "%lc", L'╢')
+    mvprintw(centerRow + 10, modalLeft + modalWidth - 1, "%lc", L'╢');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line before buttons
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 11, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 11, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // ACTION BUTTONS
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 12, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Save button (green)
+    attron(COLOR_PAIR(ColorPairs::UI_SUCCESS) | A_BOLD);
+    mvprintw(centerRow + 12, centerCol - 20, "[ S ] Save & Quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_SUCCESS) | A_BOLD);
+
+    // Don't Save button (red)
+    attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+    mvprintw(centerRow + 12, centerCol + 4, "[ Q ] Quit");
+    attroff(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 12, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Cancel button
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 13, modalLeft, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    attron(COLOR_PAIR(ColorPairs::UI_INFO));
+    mvprintw(centerRow + 13, centerCol - 10, "[ ESC ] Cancel");
+    attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 13, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // Empty line after buttons
+    attron(COLOR_PAIR(ColorPairs::UI_BORDER));
+    mvprintw(centerRow + 14, modalLeft, "%lc", L'║');
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      addch(' ');
+    }
+    mvprintw(centerRow + 14, modalLeft + modalWidth - 1, "%lc", L'║');
+    attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
+
+    // BOTTOM BORDER
+    attron(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+    mvprintw(centerRow + 15, modalLeft, "%lc", L'╚');
+    // FIX: Replaced addch(L'═') in loop with mvprintw(..., "%lc", L'═')
+    for (int i = 1; i < modalWidth - 1; i++)
+    {
+      mvprintw(centerRow + 15, modalLeft + i, "%lc", L'═');
+    }
+    // FIX: Replaced addch(L'╝') with mvprintw(..., "%lc", L'╝')
+    mvprintw(centerRow + 15, modalLeft + modalWidth - 1, "%lc", L'╝');
+    attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
+
+    // SUBTLE HINT AT BOTTOM (preserve status bar area)
+    attron(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+    mvprintw(rows - 2, centerCol - 18, "Tip: Use Ctrl+S to save anytime");
+    attroff(COLOR_PAIR(ColorPairs::STATE_DISABLED));
+
+    wnoutrefresh(stdscr);
+    doupdate();
+  };
+
+  // Initial draw
+  drawModal();
+
+  // Input loop - wait for user decision
+  while (true)
+  {
+    int key = getch();
+
+    // Handle user input
+    switch (key)
+    {
+    case 's':
+    case 'S':
+      // Save and quit
+      return UnsavedModalResult::SAVE_AND_QUIT;
+
+    case 'q':
+    case 'Q':
+      // Quit without saving
+      return UnsavedModalResult::QUIT_WITHOUT_SAVE;
+
+    case 27: // ESC key
+      // Cancel - go back to editing
+      return UnsavedModalResult::CANCEL;
+
+    case KEY_RESIZE:
+      // Handle terminal resize - redraw modal
+      getmaxyx(stdscr, rows, cols);
+      drawModal();
+      break;
+
+    default:
+      // Ignore other keys
+      break;
+    }
+  }
+}
+
 void Editor::display()
 {
+
+  if (isBinaryFile)
+  {
+    displayBinaryWarning();
+    return;
+  }
   // Validate state
   if (!validateEditorState())
   {
@@ -355,13 +826,12 @@ void Editor::display()
 
   int endLine = std::min(viewportTop + viewportHeight, buffer.getLineCount());
 
-  // OPTIMIZATION: Pre-mark viewport lines for priority parsing
   if (syntaxHighlighter)
   {
     syntaxHighlighter->markViewportLines(viewportTop, endLine - 1);
   }
 
-  // Pre-compute selection (unchanged)
+  // Pre-compute selection
   bool hasActiveSelection = (hasSelection || isSelecting);
   int sel_start_line = -1, sel_start_col = -1;
   int sel_end_line = -1, sel_end_col = -1;
@@ -376,6 +846,8 @@ void Editor::display()
   }
 
   int currentTabSize = ConfigManager::getTabSize();
+  bool isMarkdown = syntaxHighlighter &&
+                    syntaxHighlighter->getCurrentLanguage() == "markdown";
 
   // OPTIMIZATION: Batch render - minimize attribute changes
   for (int i = viewportTop; i < endLine; i++)
@@ -384,33 +856,78 @@ void Editor::display()
     bool isCurrentLine = (cursorLine == i);
 
     move(screenRow, 0);
-    attrset(COLOR_PAIR(0));
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
 
     // Render line numbers
     if (show_line_numbers)
     {
-      int ln_colorPair = isCurrentLine ? 3 : 2;
+      int ln_colorPair = isCurrentLine ? ColorPairs::LINE_NUMBERS_ACTIVE
+                                       : ColorPairs::LINE_NUMBERS;
       attron(COLOR_PAIR(ln_colorPair));
       printw("%*d ", lineNumWidth, i + 1);
       attroff(COLOR_PAIR(ln_colorPair));
 
-      attron(COLOR_PAIR(4));
+      attron(COLOR_PAIR(ColorPairs::UI_BORDER));
       addch(' ');
-      attroff(COLOR_PAIR(4));
+      attroff(COLOR_PAIR(ColorPairs::UI_BORDER));
       addch(' ');
     }
 
-    // Get line content
-    std::string expandedLine = expandTabs(buffer.getLine(i), currentTabSize);
+   
+    std::string rawLine = buffer.getLine(i);
+    std::string expandedLine = expandTabs(rawLine, currentTabSize);
 
-    // OPTIMIZATION: Get highlighting spans (cached if available)
-    std::vector<ColorSpan> currentLineSpans;
-    if (syntaxHighlighter)
+   
+    std::string displayLine = expandedLine;
+    std::vector<ColorSpan> markdownSpans;
+    int leftPadding = 0;
+    bool useMarkdownSpans = false;
+    bool isCodeBlockContent = false;
+    std::string codeLanguage;
+
+    if (isMarkdown && markdownRenderer_ && markdownRenderer_->isEnabled())
     {
+      auto renderInfo = markdownRenderer_->renderLine(
+          rawLine, i, cursorLine, buffer, syntaxHighlighter->getTree());
+
+      if (!renderInfo.hide_line)
+      {
+        displayLine = expandTabs(renderInfo.display_text, currentTabSize);
+        leftPadding = renderInfo.left_padding;
+
+        // CRITICAL: Check if this is code block content
+        isCodeBlockContent = renderInfo.is_code_block;
+        codeLanguage = renderInfo.code_language;
+
+        // Use markdown's spans ONLY for non-code-block lines
+        if (!isCodeBlockContent && !renderInfo.spans.empty())
+        {
+          markdownSpans = renderInfo.spans;
+          useMarkdownSpans = true;
+        }
+      }
+      else
+      {
+        // Line is hidden (e.g., empty fence line)
+        displayLine = "";
+      }
+    }
+
+    // Get highlighting spans
+    std::vector<ColorSpan> currentLineSpans;
+
+    if (useMarkdownSpans)
+    {
+      // Use markdown-provided spans (headings, lists, etc.)
+      currentLineSpans = markdownSpans;
+    }
+    else if (syntaxHighlighter)
+    {
+      // Get syntax highlighting (normal lines + code blocks!)
       try
       {
         currentLineSpans =
-            syntaxHighlighter->getHighlightSpans(expandedLine, i, buffer);
+            syntaxHighlighter->getHighlightSpans(displayLine, i, buffer);
       }
       catch (...)
       {
@@ -418,96 +935,87 @@ void Editor::display()
       }
     }
 
-    // Render line content (unchanged logic, but faster due to cached spans)
     bool lineHasSelection =
         hasActiveSelection && i >= sel_start_line && i <= sel_end_line;
-    int current_span_idx = 0;
-    int num_spans = currentLineSpans.size();
 
-    for (int screenCol = 0; screenCol < contentWidth; screenCol++)
+    // Build render spans that combine highlighting + selection
+    std::vector<RenderSpan> finalRenderSpans =
+        buildRenderSpans(displayLine, currentLineSpans, lineHasSelection,
+                         sel_start_line, sel_end_line, sel_start_col,
+                         sel_end_col, i, viewportLeft, contentWidth);
+
+    // Render each span as a batch
+    int screenCol = 0;
+
+    // Add left padding for markdown (e.g., code block indent)
+    for (int p = 0; p < leftPadding && screenCol < contentWidth; p++)
     {
-      int fileCol = viewportLeft + screenCol;
-      bool charExists =
-          (fileCol >= 0 && fileCol < static_cast<int>(expandedLine.length()));
-      char ch = charExists ? expandedLine[fileCol] : ' ';
+      addch(' ');
+      screenCol++;
+    }
 
-      if (charExists && (ch < 32 || ch > 126))
-        ch = ' ';
+    for (const auto &span : finalRenderSpans)
+    {
+      if (screenCol >= contentWidth)
+        break;
 
-      // Selection check
-      bool isSelected = false;
-      if (lineHasSelection && charExists)
+      // Set attributes once per span (not per character!)
+      if (span.isSelected)
       {
-        if (sel_start_line == sel_end_line)
-        {
-          isSelected = (fileCol >= sel_start_col && fileCol < sel_end_col);
-        }
-        else if (i == sel_start_line)
-        {
-          isSelected = (fileCol >= sel_start_col);
-        }
-        else if (i == sel_end_line)
-        {
-          isSelected = (fileCol < sel_end_col);
-        }
-        else
-        {
-          isSelected = true;
-        }
+        attron(COLOR_PAIR(ColorPairs::STATE_SELECTED) | A_REVERSE);
       }
-
-      if (isSelected)
+      else if (span.colorPair >= 0)
       {
-        attron(COLOR_PAIR(14) | A_REVERSE);
-        addch(ch);
-        attroff(COLOR_PAIR(14) | A_REVERSE);
+        attron(COLOR_PAIR(span.colorPair));
+        if (span.attribute != 0)
+        {
+          attron(span.attribute);
+        }
       }
       else
       {
-        bool colorApplied = false;
+        attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
+      }
 
-        if (charExists && num_spans > 0)
+      // Render all characters in this span
+      for (int col = span.start; col < span.end && screenCol < contentWidth;
+           ++col)
+      {
+        int fileCol = viewportLeft + col;
+        char ch = ' ';
+
+        if (fileCol >= 0 && fileCol < (int)displayLine.length())
         {
-          while (current_span_idx < num_spans &&
-                 currentLineSpans[current_span_idx].end <= fileCol)
-          {
-            current_span_idx++;
-          }
-
-          if (current_span_idx < num_spans)
-          {
-            const auto &span = currentLineSpans[current_span_idx];
-            if (fileCol >= span.start && fileCol < span.end)
-            {
-              if (span.colorPair >= 0 && span.colorPair < COLOR_PAIRS)
-              {
-                attron(COLOR_PAIR(span.colorPair));
-                if (span.attribute != 0)
-                  attron(span.attribute);
-                addch(ch);
-                if (span.attribute != 0)
-                  attroff(span.attribute);
-                attroff(COLOR_PAIR(span.colorPair));
-                colorApplied = true;
-              }
-            }
-          }
+          ch = displayLine[fileCol];
+          if (ch < 32 || ch > 126)
+            ch = ' ';
         }
 
-        if (!colorApplied)
+        addch(ch);
+        screenCol++;
+      }
+
+      // Clear attributes once per span
+      if (span.isSelected)
+      {
+        attroff(COLOR_PAIR(ColorPairs::STATE_SELECTED) | A_REVERSE);
+      }
+      else if (span.colorPair >= 0)
+      {
+        if (span.attribute != 0)
         {
-          attrset(COLOR_PAIR(0));
-          addch(ch);
+          attroff(span.attribute);
         }
+        attroff(COLOR_PAIR(span.colorPair));
       }
     }
 
-    attrset(COLOR_PAIR(0));
+    attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
     clrtoeol();
   }
 
   // Clear remaining lines
-  attrset(COLOR_PAIR(0));
+  attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
   for (int i = endLine - viewportTop; i < viewportHeight; i++)
   {
     move(i, 0);
@@ -518,6 +1026,100 @@ void Editor::display()
   positionCursor();
 }
 
+std::vector<Editor::RenderSpan>
+Editor::buildRenderSpans(const std::string &line,
+                         const std::vector<ColorSpan> &highlightSpans,
+                         bool lineHasSelection, int sel_start_line,
+                         int sel_end_line, int sel_start_col, int sel_end_col,
+                         int currentLine, int viewportLeft, int contentWidth)
+{
+  std::vector<RenderSpan> spans;
+
+  // Track current position and state
+  int spanStart = 0;
+  int currentColorPair = -1;
+  int currentAttribute = 0;
+  bool currentlySelected = false;
+
+  // Helper to check selection at a file column
+  auto isColSelected = [&](int fileCol) -> bool
+  {
+    if (!lineHasSelection)
+      return false;
+
+    if (sel_start_line == sel_end_line)
+    {
+      return fileCol >= sel_start_col && fileCol < sel_end_col;
+    }
+    else if (currentLine == sel_start_line)
+    {
+      return fileCol >= sel_start_col;
+    }
+    else if (currentLine == sel_end_line)
+    {
+      return fileCol < sel_end_col;
+    }
+    else
+    {
+      return true; // Middle line, fully selected
+    }
+  };
+
+  // Helper to find highlight span for a file column
+  auto findHighlightSpan = [&](int fileCol) -> const ColorSpan *
+  {
+    for (const auto &span : highlightSpans)
+    {
+      if (fileCol >= span.start && fileCol < span.end)
+      {
+        return &span;
+      }
+    }
+    return nullptr;
+  };
+
+  // Scan through visible columns and build batched spans
+  for (int screenCol = 0; screenCol < contentWidth; ++screenCol)
+  {
+    int fileCol = viewportLeft + screenCol;
+
+    bool selected = isColSelected(fileCol);
+    const ColorSpan *highlight = (fileCol >= 0 && fileCol < (int)line.length())
+                                     ? findHighlightSpan(fileCol)
+                                     : nullptr;
+
+    int colorPair = highlight ? highlight->colorPair : -1;
+    int attribute = highlight ? highlight->attribute : 0;
+
+    // Check if we need to start a new span
+    bool stateChanged = (selected != currentlySelected) ||
+                        (colorPair != currentColorPair) ||
+                        (attribute != currentAttribute);
+
+    if (stateChanged && screenCol > spanStart)
+    {
+      // Finish current span
+      spans.push_back({spanStart, screenCol, currentColorPair, currentAttribute,
+                       currentlySelected});
+      spanStart = screenCol;
+    }
+
+    // Update current state
+    currentlySelected = selected;
+    currentColorPair = colorPair;
+    currentAttribute = attribute;
+  }
+
+  // Finish last span
+  if (spanStart < contentWidth)
+  {
+    spans.push_back({spanStart, contentWidth, currentColorPair,
+                     currentAttribute, currentlySelected});
+  }
+
+  return spans;
+}
+
 void Editor::drawStatusBar()
 {
   int rows, cols;
@@ -525,14 +1127,13 @@ void Editor::drawStatusBar()
   int statusRow = rows - 1;
 
   move(statusRow, 0);
-  attrset(COLOR_PAIR(STATUS_BAR));
+  attrset(COLOR_PAIR(ColorPairs::STATUS_BAR));
   clrtoeol();
 
   move(statusRow, 0);
-  attron(COLOR_PAIR(STATUS_BAR));
 
-  // Show filename
-  attron(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
+  // Show filename using STATUS_BAR_ACTIVE for main UI elements
+  attron(COLOR_PAIR(ColorPairs::STATUS_BAR_ACTIVE) | A_BOLD);
   if (filename.empty())
   {
     printw("[No Name]");
@@ -545,23 +1146,23 @@ void Editor::drawStatusBar()
                                   : filename;
     printw("%s", displayName.c_str());
   }
-  attroff(COLOR_PAIR(STATUS_BAR_CYAN) | A_BOLD);
+  attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_ACTIVE) | A_BOLD);
 
-  // Show modified indicator
+  // Show modified indicator - use text color with bold
   if (isModified)
   {
-    attron(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT) | A_BOLD);
     printw(" [+]");
-    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE) | A_BOLD);
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT) | A_BOLD);
   }
 
   // Show file extension
   std::string ext = getFileExtension();
   if (!ext.empty())
   {
-    attron(COLOR_PAIR(STATUS_BAR_ACTIVE));
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
     printw(" [%s]", ext.c_str());
-    attroff(COLOR_PAIR(STATUS_BAR_ACTIVE));
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
   }
 
   // Right section with position info
@@ -612,24 +1213,21 @@ void Editor::drawStatusBar()
     rightStart = currentPos + 2;
   }
 
-  // Fill middle space
-  attron(COLOR_PAIR(STATUS_BAR));
+  // Fill middle space with status bar background
   for (int i = currentPos; i < rightStart && i < cols; i++)
   {
     move(statusRow, i);
-    addch(' ');
+    addch(' ' | COLOR_PAIR(ColorPairs::STATUS_BAR));
   }
 
-  // Right section
+  // Right section using STATUS_BAR_TEXT for position information
   if (rightStart < cols)
   {
     move(statusRow, rightStart);
-    attron(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
+    attron(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
     printw("%s", rightSection);
-    attroff(COLOR_PAIR(STATUS_BAR_YELLOW) | A_BOLD);
+    attroff(COLOR_PAIR(ColorPairs::STATUS_BAR_TEXT));
   }
-
-  attroff(COLOR_PAIR(STATUS_BAR));
 }
 
 void Editor::handleResize()
@@ -1100,11 +1698,16 @@ bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
 
-  if (syntaxHighlighter)
+  if (BinaryDetector::shouldTreatAsBinary(filename))
   {
-    std::string extension = getFileExtension();
-    syntaxHighlighter->setLanguage(extension);
+    isBinaryFile = true;
+    buffer.clear();
+    buffer.insertLine(0, ""); // Keep buffer valid
+    isModified = false;
+    return true; // Success, but it's binary
   }
+
+  isBinaryFile = false;
 
   if (!buffer.loadFromFile(filename))
   {
@@ -1113,7 +1716,54 @@ bool Editor::loadFile(const std::string &fname)
     return false;
   }
 
-  // Set language but DON'T parse yet - parsing happens on first display
+  if (syntaxHighlighter)
+  {
+    std::string language_name = "text"; // Default fallback
+
+    // PRIORITY 1: Try file extension first
+    std::string extension = getFileExtension();
+    if (!extension.empty())
+    {
+      language_name = config_loader_->getLanguageFromExtension(extension);
+      // If extension detection succeeded (not "text"), we're done
+      if (!language_name.empty() && language_name != "text")
+      {
+        syntaxHighlighter->setLanguage(language_name);
+        isModified = false;
+        return true;
+      }
+    }
+
+    // PRIORITY 2: Try filename matching (if extension failed or was generic)
+    // This handles cases like "CMakeLists.txt", "Makefile", ".gitignore"
+    std::string from_filename =
+        config_loader_->getLanguageFromFilename(filename);
+    if (!from_filename.empty() && from_filename != "text")
+    {
+      language_name = from_filename;
+      syntaxHighlighter->setLanguage(language_name);
+      isModified = false;
+      return true;
+    }
+
+    // PRIORITY 3: Try shebang line (for scripts without extensions)
+    // This handles cases like "#!/bin/bash" or "#!/usr/bin/env python"
+    language_name = config_loader_->getLanguageFromShebang(getFirstLine());
+    if (!language_name.empty() && language_name != "text")
+    {
+      syntaxHighlighter->setLanguage(language_name);
+      isModified = false;
+      return true;
+    }
+
+    // FALLBACK: No specific language detected, use "text"
+    if (language_name == "markdown" && markdownRenderer_)
+    {
+      markdownRenderer_->updateState(buffer, syntaxHighlighter->getTree());
+    }
+
+    syntaxHighlighter->setLanguage(language_name);
+  }
 
   isModified = false;
   return true;
@@ -1145,6 +1795,9 @@ bool Editor::saveFile()
 
 void Editor::insertChar(char ch)
 {
+  if (isBinaryFile)
+    return;
+
   if (cursorLine < 0 || cursorLine >= buffer.getLineCount())
     return;
 
@@ -1201,10 +1854,8 @@ void Editor::insertChar(char ch)
                        .count();
 
     // Boundary characters that should trigger immediate commit
-    bool is_boundary_char =
-        (ch == '>' || ch == ')' || ch == '}' || ch == ']' || ch == ';' ||
-         ch == ',' || ch == ' ' || ch == '\t' || ch == '<' || ch == '(' ||
-         ch == '{' || ch == '[');
+    bool is_boundary_char = (ch == '>' || ch == ')' || ch == '}' || ch == ']' ||
+                             ch == ';' || ch == ',');
 
     if (elapsed > UNDO_GROUP_TIMEOUT_MS || is_boundary_char)
     {
@@ -1239,6 +1890,7 @@ void Editor::insertChar(char ch)
 
     cursorCol++;
     markModified();
+    updateMarkdownRendering();
 
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
@@ -1253,32 +1905,57 @@ void Editor::insertChar(char ch)
 
 void Editor::insertNewline()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
-    EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForNewline();
-
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
-    // 1. MODIFY BUFFER FIRST
+    // 1. Split the line at cursor
     splitLineAtCursor();
     cursorLine++;
-    cursorCol = 0;
+    cursorCol = 0; // Reset column first
 
-    // 2. THEN notify Tree-sitter AFTER buffer change
+    // 2. Calculate and apply auto-indent AFTER line split
+#ifdef TREE_SITTER_ENABLED
+    int indent_spaces = 0;
+    // ONLY auto-indent if NOT pasting
+    if (!isPasting_ && indentManager_ && syntaxHighlighter &&
+        syntaxHighlighter->hasValidTree())
+    {
+      // Calculate indent for the NEW line (cursorLine) based on PREVIOUS line
+      indent_spaces = indentManager_->calculateIndentAfterLine(
+          cursorLine - 1, buffer, syntaxHighlighter->getTree());
+
+      if (indent_spaces > 0)
+      {
+        std::string line = buffer.getLine(cursorLine);
+        std::string indent_str(indent_spaces, ' ');
+        line = indent_str + line;
+        buffer.replaceLine(cursorLine, line);
+        cursorCol = indent_spaces;
+      }
+    }
+#endif
+
+    // 3. Update Tree-sitter AFTER buffer modification
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(
-          buffer, byte_pos, 0, 1,                  // Inserted 1 byte (newline)
-          delta.preCursorLine, delta.preCursorCol, // OLD position
-          delta.preCursorLine, delta.preCursorCol, cursorLine,
-          0); // NEW position
+      // Calculate new byte count (newline char + any indent)
+      int bytes_inserted = 1 + cursorCol;
 
-      // Invalidate from split point onwards
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, bytes_inserted, delta.preCursorLine,
+          delta.preCursorCol, delta.preCursorLine, delta.preCursorCol,
+          cursorLine, cursorCol);
+
       syntaxHighlighter->invalidateLineRange(cursorLine - 1,
                                              buffer.getLineCount() - 1);
     }
 
+    // 4. Adjust viewport if needed
     if (cursorLine >= viewportTop + viewportHeight)
     {
       viewportTop = cursorLine - viewportHeight + 1;
@@ -1295,7 +1972,6 @@ void Editor::insertNewline()
     if (valid)
     {
       addDelta(delta);
-      // Newlines always commit the current group
       commitDeltaGroup();
       beginDeltaGroup();
     }
@@ -1306,23 +1982,43 @@ void Editor::insertNewline()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
+    // Full-state undo path
     saveState();
-
     size_t byte_pos = buffer.lineColToPos(cursorLine, cursorCol);
 
     splitLineAtCursor();
     cursorLine++;
     cursorCol = 0;
 
+#ifdef TREE_SITTER_ENABLED
+    int indent_spaces = 0;
+    if (indentManager_ && syntaxHighlighter &&
+        syntaxHighlighter->hasValidTree())
+    {
+      indent_spaces = indentManager_->calculateIndentAfterLine(
+          cursorLine - 1, buffer, syntaxHighlighter->getTree());
+
+      if (indent_spaces > 0)
+      {
+        std::string line = buffer.getLine(cursorLine);
+        std::string indent_str(indent_spaces, ' ');
+        line = indent_str + line;
+        buffer.replaceLine(cursorLine, line);
+        cursorCol = indent_spaces;
+      }
+    }
+#endif
+
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(buffer, byte_pos, 0, 1,
-                                             cursorLine - 1, 0, cursorLine - 1,
-                                             0, cursorLine, 0);
+      int bytes_inserted = 1 + cursorCol;
+      syntaxHighlighter->updateTreeAfterEdit(
+          buffer, byte_pos, 0, bytes_inserted, cursorLine - 1, 0,
+          cursorLine - 1, 0, cursorLine, cursorCol);
       syntaxHighlighter->invalidateLineRange(cursorLine - 1,
                                              buffer.getLineCount() - 1);
     }
@@ -1333,11 +2029,15 @@ void Editor::insertNewline()
     }
     viewportLeft = 0;
     markModified();
+    updateMarkdownRendering();
   }
 }
 
 void Editor::deleteChar()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
@@ -1400,6 +2100,7 @@ void Editor::deleteChar()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -1422,6 +2123,7 @@ void Editor::deleteChar()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
     else if (cursorLine < buffer.getLineCount() - 1)
     {
@@ -1440,12 +2142,16 @@ void Editor::deleteChar()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
   }
 }
 
 void Editor::backspace()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
@@ -1520,6 +2226,7 @@ void Editor::backspace()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
@@ -1548,6 +2255,7 @@ void Editor::backspace()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
     else if (cursorLine > 0)
     {
@@ -1571,12 +2279,16 @@ void Editor::backspace()
       }
 
       markModified();
+      updateMarkdownRendering();
     }
   }
 }
 
 void Editor::deleteLine()
 {
+  if (isBinaryFile)
+    return;
+
   // SAVE STATE BEFORE MODIFICATION
   if (!isUndoRedoing)
   {
@@ -1637,6 +2349,7 @@ void Editor::deleteLine()
 
   validateCursorAndViewport();
   markModified();
+  updateMarkdownRendering();
 }
 
 // =================================================================
@@ -1645,53 +2358,81 @@ void Editor::deleteLine()
 
 void Editor::deleteSelection()
 {
-  if (!hasSelection && !isSelecting)
+  if (isBinaryFile)
     return;
+
+  if (!hasSelection && !isSelecting)
+  {
+    return;
+  }
+
+  auto selection = getNormalizedSelection();
+  int startLine = selection.first.first;
+  int startCol = selection.first.second;
+  int endLine = selection.second.first;
+  int endCol = selection.second.second;
+
+  // Validate bounds
+  if (startLine < 0 || startLine >= buffer.getLineCount() || endLine < 0 ||
+      endLine >= buffer.getLineCount())
+  {
+    std::cerr << "Warning: Cannot delete - selection out of bounds\n";
+    clearSelection();
+    return;
+  }
 
   if (useDeltaUndo_ && !isUndoRedoing)
   {
     EditorSnapshot before = captureSnapshot();
     EditDelta delta = createDeltaForDeleteSelection();
 
-    auto selection = getNormalizedSelection();
-    int startLine = selection.first.first;
-    int startCol = selection.first.second;
-    int endLine = selection.second.first;
-    int endCol = selection.second.second;
-
     size_t start_byte = buffer.lineColToPos(startLine, startCol);
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
-    size_t delete_bytes = end_byte - start_byte;
+    size_t delete_bytes = (end_byte > start_byte) ? (end_byte - start_byte) : 0;
 
-    // 1. MODIFY BUFFER FIRST
+    // Perform the deletion
     if (startLine == endLine)
     {
+      // Single line deletion
       std::string line = buffer.getLine(startLine);
-      line.erase(startCol, endCol - startCol);
-      buffer.replaceLine(startLine, line);
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(line.length())));
+      endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+      if (endCol > startCol)
+      {
+        line.erase(startCol, endCol - startCol);
+        buffer.replaceLine(startLine, line);
+      }
     }
     else
     {
+      // Multi-line deletion
       std::string firstLine = buffer.getLine(startLine);
       std::string lastLine = buffer.getLine(endLine);
+
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(firstLine.length())));
+      endCol =
+          std::max(0, std::min(endCol, static_cast<int>(lastLine.length())));
 
       std::string newLine =
           firstLine.substr(0, startCol) + lastLine.substr(endCol);
       buffer.replaceLine(startLine, newLine);
 
+      // Delete intermediate lines
       for (int i = endLine; i > startLine; i--)
       {
         buffer.deleteLine(i);
       }
     }
 
-    // 2. THEN notify Tree-sitter AFTER buffer change
+    // Update syntax highlighter
     if (syntaxHighlighter && !isUndoRedoing)
     {
-      syntaxHighlighter->updateTreeAfterEdit(
-          buffer, start_byte, delete_bytes, 0, // Deleted bytes
-          startLine, startCol, endLine, endCol, startLine, startCol);
-
+      syntaxHighlighter->updateTreeAfterEdit(buffer, start_byte, delete_bytes,
+                                             0, startLine, startCol, endLine,
+                                             endCol, startLine, startCol);
       syntaxHighlighter->invalidateLineRange(startLine,
                                              buffer.getLineCount() - 1);
     }
@@ -1699,7 +2440,6 @@ void Editor::deleteSelection()
     updateCursorAndViewport(startLine, startCol);
     clearSelection();
 
-    // Complete delta
     delta.postCursorLine = cursorLine;
     delta.postCursorCol = cursorCol;
     delta.postViewportTop = viewportTop;
@@ -1719,32 +2459,39 @@ void Editor::deleteSelection()
     }
 
     markModified();
+    updateMarkdownRendering();
   }
   else if (!isUndoRedoing)
   {
-    // OLD: Full-state undo
+    // Fallback: full-state undo
     saveState();
-
-    auto selection = getNormalizedSelection();
-    int startLine = selection.first.first;
-    int startCol = selection.first.second;
-    int endLine = selection.second.first;
-    int endCol = selection.second.second;
 
     size_t start_byte = buffer.lineColToPos(startLine, startCol);
     size_t end_byte = buffer.lineColToPos(endLine, endCol);
-    size_t delete_bytes = end_byte - start_byte;
+    size_t delete_bytes = (end_byte > start_byte) ? (end_byte - start_byte) : 0;
 
     if (startLine == endLine)
     {
       std::string line = buffer.getLine(startLine);
-      line.erase(startCol, endCol - startCol);
-      buffer.replaceLine(startLine, line);
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(line.length())));
+      endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+      if (endCol > startCol)
+      {
+        line.erase(startCol, endCol - startCol);
+        buffer.replaceLine(startLine, line);
+      }
     }
     else
     {
       std::string firstLine = buffer.getLine(startLine);
       std::string lastLine = buffer.getLine(endLine);
+
+      startCol =
+          std::max(0, std::min(startCol, static_cast<int>(firstLine.length())));
+      endCol =
+          std::max(0, std::min(endCol, static_cast<int>(lastLine.length())));
 
       std::string newLine =
           firstLine.substr(0, startCol) + lastLine.substr(endCol);
@@ -1768,11 +2515,15 @@ void Editor::deleteSelection()
     updateCursorAndViewport(startLine, startCol);
     clearSelection();
     markModified();
+    updateMarkdownRendering();
   }
 }
 
 void Editor::undo()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_)
   {
     // Commit any pending delta group first
@@ -1874,6 +2625,9 @@ void Editor::undo()
 
 void Editor::redo()
 {
+  if (isBinaryFile)
+    return;
+
   if (useDeltaUndo_)
   {
     if (deltaRedoStack_.empty())
@@ -2091,14 +2845,27 @@ Editor::getNormalizedSelection()
 
   return {{startLine, startCol}, {endLine, endCol}};
 }
+
 std::string Editor::getSelectedText()
 {
   if (!hasSelection && !isSelecting)
+  {
     return "";
+  }
 
   auto [start, end] = getNormalizedSelection();
-  int startLine = start.first, startCol = start.second;
-  int endLine = end.first, endCol = end.second;
+  int startLine = start.first;
+  int startCol = start.second;
+  int endLine = end.first;
+  int endCol = end.second;
+
+  // Validate bounds
+  if (startLine < 0 || startLine >= buffer.getLineCount() || endLine < 0 ||
+      endLine >= buffer.getLineCount())
+  {
+    std::cerr << "Warning: Selection out of bounds\n";
+    return "";
+  }
 
   std::ostringstream result;
 
@@ -2106,7 +2873,15 @@ std::string Editor::getSelectedText()
   {
     // Single line selection
     std::string line = buffer.getLine(startLine);
-    result << line.substr(startCol, endCol - startCol);
+
+    // Clamp columns to line length
+    startCol = std::max(0, std::min(startCol, static_cast<int>(line.length())));
+    endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
+
+    if (endCol > startCol)
+    {
+      result << line.substr(startCol, endCol - startCol);
+    }
   }
   else
   {
@@ -2117,17 +2892,24 @@ std::string Editor::getSelectedText()
 
       if (i == startLine)
       {
+        // First line: from startCol to end
+        startCol =
+            std::max(0, std::min(startCol, static_cast<int>(line.length())));
         result << line.substr(startCol);
       }
       else if (i == endLine)
       {
+        // Last line: from start to endCol
+        endCol = std::max(0, std::min(endCol, static_cast<int>(line.length())));
         result << line.substr(0, endCol);
       }
       else
       {
+        // Middle lines: entire line
         result << line;
       }
 
+      // Add newline between lines (but not after last line)
       if (i < endLine)
       {
         result << "\n";
@@ -2135,7 +2917,6 @@ std::string Editor::getSelectedText()
     }
   }
 
-  // CRITICAL FIX: Actually return the result!
   return result.str();
 }
 
@@ -2166,21 +2947,33 @@ void Editor::updateSelectionEnd()
 void Editor::copySelection()
 {
   if (!hasSelection && !isSelecting)
-    return;
-
-  clipboard = getSelectedText();
-
-  // On Unix, also copy to system clipboard using xclip or xsel
-#ifndef _WIN32
-  FILE *pipe = popen("xclip -selection clipboard 2>/dev/null || xsel "
-                     "--clipboard --input 2>/dev/null",
-                     "w");
-  if (pipe)
   {
-    fwrite(clipboard.c_str(), 1, clipboard.length(), pipe);
-    pclose(pipe);
+    return;
   }
-#endif
+
+  // Get the selected text
+  std::string selectedText = getSelectedText();
+
+  if (selectedText.empty())
+  {
+    std::cerr << "Warning: No text selected for copy\n";
+    return;
+  }
+
+  // Store in internal clipboard (fallback)
+  clipboard = selectedText;
+
+  // Try to copy to system clipboard
+  if (Clipboard::copyToSystemClipboard(selectedText))
+  {
+    // Success - optionally show a status message
+    // std::cerr << "Copied " << selectedText.length() << " characters\n";
+  }
+  else
+  {
+    std::cerr << "Warning: Could not access system clipboard, using internal "
+                 "clipboard\n";
+  }
 }
 
 void Editor::cutSelection()
@@ -2194,57 +2987,99 @@ void Editor::cutSelection()
 
 void Editor::pasteFromClipboard()
 {
-  // Try to get from system clipboard first
-#ifndef _WIN32
-  FILE *pipe = popen("xclip -selection clipboard -o 2>/dev/null || xsel "
-                     "--clipboard --output 2>/dev/null",
-                     "r");
-  if (pipe)
+  // Get clipboard content
+  std::string systemClipboard = Clipboard::getFromSystemClipboard();
+  if (!systemClipboard.empty())
   {
-    char buffer_chars[4096];
-    std::string result;
-    while (fgets(buffer_chars, sizeof(buffer_chars), pipe))
-    {
-      result += buffer_chars;
-    }
-    pclose(pipe);
-
-    if (!result.empty())
-    {
-      clipboard = result;
-    }
+    clipboard = systemClipboard;
   }
-#endif
-
   if (clipboard.empty())
-    return;
-
-  // SAVE STATE BEFORE PASTE (single undo point for entire paste)
-  if (!isUndoRedoing)
   {
-    saveState();
+    return;
   }
 
-  // Delete selection if any
+  // Save starting position
+  int start_line = cursorLine;
+  int start_col = cursorCol;
+
+  // Save state for undo
+  if (useDeltaUndo_ && !isUndoRedoing)
+    beginDeltaGroup();
+  else if (!isUndoRedoing)
+    saveState();
+
+  // Delete selection if present
   if (hasSelection || isSelecting)
   {
     deleteSelection();
+    // Update positions after deletion
+    start_line = cursorLine;
+    start_col = cursorCol;
   }
 
-  // Insert clipboard content character by character
-  // Note: Each insertChar/insertNewline will NOT call saveState
-  // because we already saved it above
-  for (char ch : clipboard)
+  // Calculate byte position BEFORE insertion
+  size_t byte_pos = buffer.lineColToPos(start_line, start_col);
+
+  // Insert the clipboard text directly into buffer
+  buffer.insertText(byte_pos, clipboard);
+
+  // Calculate new cursor position by counting newlines
+  int newlines = std::count(clipboard.begin(), clipboard.end(), '\n');
+
+  if (newlines == 0)
   {
-    if (ch == '\n')
-    {
-      insertNewline();
-    }
-    else
-    {
-      insertChar(ch);
-    }
+    // Single line paste - cursor moves right
+    cursorCol = start_col + clipboard.length();
   }
+  else
+  {
+    // Multi-line paste - cursor moves down and to end of last line
+    cursorLine = start_line + newlines;
+    size_t last_newline = clipboard.rfind('\n');
+    cursorCol = clipboard.length() - last_newline - 1;
+  }
+
+  // CRITICAL: Update syntax highlighting with correct parameters
+  if (syntaxHighlighter && !isUndoRedoing)
+  {
+    // Calculate end position AFTER insertion
+    size_t end_byte = buffer.lineColToPos(cursorLine, cursorCol);
+    size_t inserted_bytes = clipboard.length();
+
+    // Notify Tree-sitter of the edit
+    syntaxHighlighter->updateTreeAfterEdit(
+        buffer,
+        byte_pos,       // where we inserted
+        0,              // deleted 0 bytes
+        inserted_bytes, // inserted clipboard.length() bytes
+        start_line,     // old start row
+        start_col,      // old start col
+        start_line,     // old end row (same as start, we inserted)
+        start_col,      // old end col (same as start)
+        cursorLine,     // new end row
+        cursorCol       // new end col
+    );
+
+    // Invalidate cache for affected lines
+    int affected_start = start_line;
+    int affected_end = std::min(cursorLine + 50, buffer.getLineCount() - 1);
+    syntaxHighlighter->invalidateLineRange(affected_start, affected_end);
+  }
+
+  // Adjust viewport to show cursor
+  validateCursorAndViewport();
+
+  // Commit undo state
+  if (useDeltaUndo_ && !isUndoRedoing)
+  {
+    commitDeltaGroup();
+    beginDeltaGroup();
+  }
+
+  markModified();
+
+  // Force a full syntax reparse in the background
+  forceSyntaxResync();
 }
 
 void Editor::selectAll()
@@ -2267,7 +3102,9 @@ void Editor::initializeViewportHighlighting()
 {
   if (syntaxHighlighter)
   {
-    // Pre-parse viewport so first display() is instant
+    // Only parse if queries are already loaded
+    // This prevents blocking on large files where queries are still loading
+
     syntaxHighlighter->parseViewportOnly(buffer, viewportTop);
   }
 }
@@ -3010,6 +3847,14 @@ void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
                                     delta.startCol);
       break;
     }
+    case EditDelta::REPLACE_LINE:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, // Add newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0, delta.startLine,
+                                    delta.startCol);
+      break;
+    }
     }
   }
   else
@@ -3053,6 +3898,89 @@ void Editor::notifyTreeSitterEdit(const EditDelta &delta, bool isReverse)
                                     delta.startCol, delta.startLine + 1, 0);
       break;
     }
+    case EditDelta::REPLACE_LINE:
+    {
+      syntaxHighlighter->notifyEdit(start_byte, 1, 0, // Add newline
+                                    delta.startLine, delta.startCol,
+                                    delta.startLine + 1, 0, delta.startLine,
+                                    delta.startCol);
+      break;
     }
+    }
+  }
+}
+
+int Editor::removePreviousIndent(int amount)
+{
+  if (amount <= 0 || cursorCol <= 0)
+  {
+    return 0;
+  }
+
+  std::string line = buffer.getLine(cursorLine);
+
+  // Count actual removable whitespace
+  int actual_remove = 0;
+  int check_pos = cursorCol - 1;
+
+  while (check_pos >= 0 && actual_remove < amount)
+  {
+    if (line[check_pos] == ' ')
+    {
+      actual_remove++;
+      check_pos--;
+    }
+    else if (line[check_pos] == '\t')
+    {
+      // Tab counts as tabSize spaces
+      int tab_spaces = std::min(amount - actual_remove, tabSize);
+      actual_remove += tab_spaces;
+      check_pos--;
+    }
+    else
+    {
+      break; // Stop at non-whitespace
+    }
+  }
+
+  if (actual_remove > 0)
+  {
+    // Calculate how many characters to actually remove
+    int chars_to_remove = cursorCol - check_pos - 1;
+
+    // Remove the whitespace
+    line.erase(check_pos + 1, chars_to_remove);
+    buffer.replaceLine(cursorLine, line);
+    cursorCol -= chars_to_remove;
+
+    if (syntaxHighlighter)
+    {
+      syntaxHighlighter->invalidateLineCache(cursorLine);
+      // syntaxHighlighter->parseFullBuffer(buffer);
+    }
+  }
+
+  return actual_remove;
+}
+
+void Editor::forceSyntaxResync()
+{
+  if (!syntaxHighlighter)
+    return;
+
+#ifdef TREE_SITTER_ENABLED
+  // Schedule a background full reparse to fix any inconsistencies
+  syntaxHighlighter->scheduleBackgroundParse(buffer);
+#endif
+}
+
+void Editor::updateMarkdownRendering()
+{
+  if (!syntaxHighlighter || !markdownRenderer_)
+    return;
+
+  if (syntaxHighlighter->getCurrentLanguage() == "markdown")
+  {
+    markdownRenderer_->updateState(buffer, syntaxHighlighter->getTree());
   }
 }

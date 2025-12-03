@@ -1,0 +1,62 @@
+name: "Gruvbox Dark"
+
+# Core colors
+background: "#282828"
+foreground: "#EBDBB2"
+
+# State colors
+state_active: "#8EC07C"
+state_selected: "#3C3836"
+state_hover: "#32302F"
+state_disabled: "#7C6F64"
+
+# Semantic UI colors
+ui_primary: "#83A598"
+ui_secondary: "#928374"
+ui_accent: "#D3869B"
+ui_success: "#B8BB26"
+ui_warning: "#FABD2F"
+ui_error: "#FB4934"
+ui_info: "#83A598"
+ui_border: "#3C3836"
+
+# Editor-specific
+cursor: "#FBF1C7"
+line_numbers: "#7C6F64"
+line_numbers_active: "#EBDBB2"
+line_highlight: "#32302F"
+
+# Status bar
+status_bar_bg: "#3C3836"
+status_bar_fg: "#EBDBB2"
+status_bar_active: "#8EC07C"
+
+# Syntax highlighting
+keyword: "#FB4934"
+string_literal: "#B8BB26"
+number: "#D3869B"
+comment: "#928374"
+function_name: "#FABD2F"
+variable: "#EBDBB2"
+type: "#83A598"
+operator: "#FE8019"
+punctuation: "#EBDBB2"
+constant: "#83A598"
+namespace: "#83A598"
+property: "#EBDBB2"
+decorator: "#FABD2F"
+macro: "#FB4934"
+label: "#FB4934"
+
+# Markup
+markup_heading: "#FB4934"
+markup_bold: "#FBF1C7"
+markup_italic: "#B8BB26"
+markup_code: "#FABD2F"
+markup_code_block: "#FABD2F"
+markup_link: "#83A598"
+markup_url: "#83A598"
+markup_list: "#B8BB26"
+markup_blockquote: "#928374"
+markup_strikethrough: "#CC241D"
+markup_quote: "#928374"

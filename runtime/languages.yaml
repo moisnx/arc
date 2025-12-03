@@ -1,0 +1,171 @@
+# Language Registry for Arc Editor
+# This file defines all supported languages and their configurations
+
+languages:
+  html:
+    name: "html"
+    extensions: ["html"]
+    parser_name: "html"
+    queries:
+      [
+        "runtime/queries/html/highlights.scm",
+        "runtime/queries/html/injections.scm",
+      ]
+  css:
+    name: "css"
+    extensions: ["css"]
+    parser_name: "css"
+    queries: ["runtime/queries/css/highlights.scm"]
+
+  javascript:
+    name: "javascript"
+    extensions: ["js", "mjs", "jsx"]
+    parser_name: "javascript"
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_javascript/highlights.scm",
+        "runtime/queries/_jsx/highlights.scm",
+      ]
+
+  c:
+    name: "c"
+    extensions: ["c", "h"]
+    parser_name: "c"
+    queries: ["runtime/queries/c/highlights.scm"]
+
+  cpp:
+    name: "cpp"
+    extensions: ["cpp", "cc", "cxx", "hpp", "hxx"]
+    parser_name: "cpp"
+    queries:
+      ["runtime/queries/c/highlights.scm", "runtime/queries/cpp/highlights.scm"]
+
+  python:
+    name: "python"
+    extensions: ["py", "pyw", "pyi"]
+    aliases: ["python", "python3", "pipenv"]
+    parser_name: "python"
+    queries: ["runtime/queries/python/highlights.scm"]
+
+  rust:
+    name: "rust"
+    extensions: ["rs"]
+    parser_name: "rust"
+    queries: ["runtime/queries/rust/highlights.scm"]
+
+  markdown:
+    name: "markdown"
+    extensions: ["md", "markdown", "mdown", "mkd"]
+    builtin: true
+    parser_name: "markdown"
+    queries:
+      [
+        "runtime/queries/markdown/highlights.scm",
+        "runtime/queries/markdown/injections.scm",
+      ]
+
+  markdown_inline:
+    name: "markdown.inline"
+    builtin: true
+    parser_name: "markdown_inline"
+    queries:
+      [
+        "runtime/queries/markdown.inline/highlights.scm",
+        "runtime/queries/markdown.inline/injections.scm",
+      ]
+
+  typescript:
+    name: "typescript"
+    extensions: ["ts"]
+    parser_name: "typescript"
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_typescript/highlights.scm",
+      ]
+
+  tsx:
+    name: "tsx"
+    extensions: ["tsx"]
+    parser_name: "tsx"
+    queries:
+      [
+        "runtime/queries/ecma/highlights.scm",
+        "runtime/queries/_typescript/highlights.scm",
+        "runtime/queries/_jsx/highlights.scm",
+      ]
+
+  zig:
+    name: "zig"
+    extensions: ["zig", "zir", "zigr", "zon"]
+    parser_name: "zig"
+    queries: ["runtime/queries/zig/highlights.scm"]
+
+  go:
+    name: "go"
+    extensions: ["go"]
+    parser_name: "go"
+    queries: ["runtime/queries/go/highlights.scm"]
+
+  ruby:
+    name: "ruby"
+    extensions: ["rb"]
+    aliases: ["ruby", "jruby"]
+    parser_name: "ruby"
+    queries: ["runtime/queries/ruby/highlights.scm"]
+
+  bash:
+    name: "bash"
+    extensions: ["sh", "bashrc", "zshrc"]
+    aliases: ["bash", "sh", "zsh", "console"]
+    parser_name: "bash"
+    queries: ["runtime/queries/bash/highlights.scm"]
+
+  yaml:
+    name: "yaml"
+    extensions: ["yaml", "yml"]
+    parser_name: "yaml"
+    queries: ["runtime/queries/yaml/highlights.scm"]
+
+  toml:
+    name: "toml"
+    extensions: ["toml"]
+    parser_name: "toml"
+    queries: ["runtime/queries/toml/highlights.scm"]
+
+  json:
+    name: "json"
+    extensions: ["json"]
+    parser_name: "json"
+    queries: ["runtime/queries/json/highlights.scm"]
+
+  lua:
+    name: "lua"
+    extensions: ["lua"]
+    parser_name: "lua"
+    builtin: true
+    queries: ["runtime/queries/lua/highlights.scm"]
+
+  cmake:
+    name: "cmake"
+    extensions: ["cmake"]
+    filenames: ["CMakeLists.txt", "CMakeCache.txt"]
+    parser_name: "cmake"
+    builtin: true
+    queries: ["runtime/queries/cmake/highlights.scm"]
+
+  make:
+    name: "make"
+    extensions: ["make", "makefile"]
+    filenames: ["Makefile", "makefile", "GNUmakefile", "BSDmakefile"]
+    parser_name: "make"
+    builtin: true
+    queries: ["runtime/queries/make/highlights.scm"]
+
+  powershell:
+    name: "powershell"
+    extensions: ["ps1", "psm1", "psd1"]
+    parser_name: "powershell"
+    builtin: true
+    queries: ["runtime/queries/powershell/highlights.scm"]

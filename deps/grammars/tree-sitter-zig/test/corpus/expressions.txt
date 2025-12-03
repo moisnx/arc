@@ -1,0 +1,1398 @@
+============================================
+Assigment expression
+============================================
+
+x = 10;
+y = 11.0;
+z = "what";
+w = z;
+@"tree-sitter" = 10;
+
+---
+
+(source_file
+  (assignment_expression
+    left: (identifier)
+    right: (integer_literal))
+  (assignment_expression
+    left: (identifier)
+    right: (float_literal))
+  (assignment_expression
+    left: (identifier)
+    right: (string_literal))
+  (assignment_expression
+    left: (identifier)
+    right: (identifier))
+  (assignment_expression
+    left: (identifier (string_literal))
+    right: (integer_literal)
+  ))
+
+============================================
+Compound Assigment expression
+============================================
+
+x += 1;
+y -= 11.1;
+z *= w;
+a /= 7;
+b %= 2;
+c &= 0b001100;
+d |= 0xABABAB;
+e ^= 0o777;
+f <<= 1;
+g >>= 2;
+h +%= x;
+i -%= 1;
+j *%= 2;
+
+---
+
+(source_file
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (float_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (identifier))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (identifier))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal))
+  (compound_assignment_expr
+    left: (identifier)
+    operator: (assignment_operator)
+    right: (integer_literal)))
+
+============================================
+Unary expression
+============================================
+
+!x;
+~true;
+-%10;
+-11.9;
+
+---
+
+(source_file
+  (unary_expression
+    operator: (unary_operator)
+    expression: (identifier))
+  (unary_expression
+    operator: (unary_operator)
+    expression: (boolean_literal))
+  (unary_expression
+    operator: (unary_operator)
+    expression: (integer_literal))
+  (unary_expression
+    operator: (unary_operator)
+    expression: (float_literal)))
+
+============================================
+Binary expression
+============================================
+
+1 + 2;
+x +% 10;
+11.1 - 0.1;
+y -% z;
+2 * n;
+2 *% m;
+x / t;
+10 % 2;
+1 << 2;
+3 >> 4;
+true & false;
+false | true;
+right ^ left;
+error1 || error2;
+a orelse b;
+x and y;
+boy or girl;
+vec1 ++ vec2;
+vec1 ** vec3;
+
+a == b;
+10 != 11;
+1.0 < 2.0;
+x <= 1;
+10 > y;
+x >= 2;
+
+---
+
+(source_file
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (float_literal)
+    operator: (binary_operator)
+    right: (float_literal))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (boolean_literal)
+    operator: (binary_operator)
+    right: (boolean_literal))
+  (binary_expression
+    left: (boolean_literal)
+    operator: (binary_operator)
+    right: (boolean_literal))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (float_literal)
+    operator: (binary_operator)
+    right: (float_literal))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (integer_literal))
+  (binary_expression
+    left: (integer_literal)
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (identifier)
+    operator: (binary_operator)
+    right: (integer_literal)))
+
+
+============================================
+Complex unary/binary expression
+============================================
+
+a == b and a > 10;
+!a and b;
+!a and b > 10;
+
+---
+
+(source_file
+  (binary_expression
+    left: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (identifier))
+    operator: (binary_operator)
+    right: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (integer_literal)))
+  (binary_expression
+    left: (unary_expression
+      operator: (unary_operator)
+      expression: (identifier))
+    operator: (binary_operator)
+    right: (identifier))
+  (binary_expression
+    left: (unary_expression
+      operator: (unary_operator)
+      expression: (identifier))
+    operator: (binary_operator)
+    right: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (integer_literal))))
+
+============================================
+Type expression
+============================================
+
+usize;
+f64;
+
+?i32;
+?Point;
+
+[]u8;
+[_]u8;
+[4]u8;
+[*]u8;
+[]align(16) u8;
+
+*i32;
+*allowzero i32;
+*volatile i32;
+*const Point;
+*align(16) i32;
+*std.ArrayList;
+
+[]?u32;
+?[]u32;
+*[]u32;
+[]*u32;
+
+?*Point;
+*?Point;
+
+anyerror!*u8;
+anyerror!u8;
+anyerror!?u8;
+
+i7;
+u33;
+
+---
+
+(source_file
+  (primitive_type)
+  (primitive_type)
+
+  (optional_type
+    (primitive_type))
+  (optional_type
+    (type_identifier))
+
+  (array_type
+    (primitive_type))
+  (array_type
+    size: (identifier)
+    (primitive_type))
+  (array_type
+    size: (integer_literal)
+    (primitive_type))
+  (array_type
+    size: (pointer)
+    (primitive_type))
+  (array_type
+    (type_prefix
+      (integer_literal))
+    (primitive_type))
+
+  (pointer_type
+    (primitive_type))
+  (pointer_type
+    (type_prefix)
+    (primitive_type))
+  (pointer_type
+    (type_prefix)
+    (primitive_type))
+  (pointer_type
+    (type_prefix)
+    (identifier))
+  (pointer_type
+    (type_prefix
+      (integer_literal))
+    (primitive_type))
+  (pointer_type
+    (field_expression
+      value: (identifier)
+      field: (field_identifier)))
+  (array_type
+    (optional_type
+      (primitive_type)))
+  (optional_type
+    (array_type
+      (primitive_type)))
+  (pointer_type
+    (array_type
+      (primitive_type)))
+  (array_type
+    (pointer_type
+      (primitive_type)))
+  (optional_type
+    (pointer_type
+      (identifier)))
+  (pointer_type
+    (optional_type
+      (type_identifier)))
+  (error_type
+    err: (primitive_type)
+    ok: (pointer_type
+      (primitive_type)))
+  (error_type
+    err: (primitive_type)
+    ok: (primitive_type))
+  (error_type
+    err: (primitive_type)
+    ok: (optional_type
+      (primitive_type)))
+  (custom_number_type)
+  (custom_number_type))
+
+============================================
+Call expressions (both build in and normal)
+============================================
+
+@buildin();
+@ptrToInt(ptr);
+
+call();
+double(x);
+
+assert(@typeOf(ptr) == [*]i32);
+
+std.debug.warn("Hello");
+
+async afunc();
+async afunc(a, b);
+
+---
+
+(source_file
+  (build_in_call_expr
+    function: (identifier)
+    arguments: (arguments))
+  (build_in_call_expr
+    function: (identifier)
+    arguments: (arguments
+      (identifier)))
+
+  (call_expression
+    function: (identifier)
+    arguments: (arguments))
+  (call_expression
+    function: (identifier)
+    arguments: (arguments
+      (identifier)))
+
+  (call_expression
+    function: (identifier)
+    arguments: (arguments
+      (binary_expression
+        left: (build_in_call_expr
+          function: (identifier)
+          arguments: (arguments
+            (identifier)))
+        operator: (binary_operator)
+        right: (array_type
+          size: (pointer)
+          (primitive_type)))))
+  (field_expression
+    value: (field_expression
+      value: (identifier)
+      field: (field_identifier))
+    field: (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (string_literal))))
+  (call_expression
+    (call_modifier)
+    function: (identifier)
+    arguments: (arguments))
+  (call_expression
+    (call_modifier)
+    function: (identifier)
+    arguments: (arguments
+      (identifier)
+      (identifier))))
+
+============================================
+Await expression
+============================================
+
+await ptr;
+await async call();
+
+---
+
+(source_file
+  (await_expression
+    (identifier))
+  (await_expression
+    (call_expression
+      (call_modifier)
+      function: (identifier)
+      arguments: (arguments))))
+
+============================================
+Suspend/Resume expression
+============================================
+
+suspend;
+suspend p;
+
+resume;
+resume p;
+
+suspend {}
+suspend {
+    a
+}
+
+resume {}
+resume {
+    a
+}
+
+---
+
+(source_file
+  (suspend_expression)
+  (suspend_expression
+    (identifier))
+  (resume_expression)
+  (resume_expression
+    (identifier))
+  (suspend_block
+    (block))
+  (suspend_block
+    (block
+      (identifier)))
+  (resume_block
+    (block))
+  (resume_block
+    (block
+      (identifier))))
+
+============================================
+Reference and deference expression
+============================================
+
+&a;
+
+a.*;
+
+---
+
+(source_file
+  (reference_expression
+    value: (identifier))
+  (dereference_expression
+    value: (identifier)))
+
+============================================
+If expression
+============================================
+
+if (true) {}
+
+if (true) {} else {}
+
+if (a > b) {} else if (a == b) {} else {}
+
+if (a) |value| {}
+if (a) |*value| {}
+
+if (a) |value, i| {}
+if (a) |*value, i| {}
+
+if (a) |value| {} else {}
+if (a) |*value| {} else {}
+
+if (a) |value| {} else |err| {}
+if (a) |*value| {} else |err| {}
+
+if (a != b) 47 else 3089
+
+if (true)
+    a
+else
+    b
+
+
+---
+
+(source_file
+  (if_expression
+    condition: (boolean_literal)
+    consequence: (block))
+  (if_expression
+    condition: (boolean_literal)
+    consequence: (block)
+    alternative: (block))
+  (if_expression
+    condition: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (identifier))
+    consequence: (block)
+    alternative: (if_expression
+      condition: (binary_expression
+        left: (identifier)
+        operator: (binary_operator)
+        right: (identifier))
+      consequence: (block)
+      alternative: (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier)
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier)
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block))
+    alternative: (block))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block))
+    alternative: (block))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block))
+    alternative: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (identifier)
+    consequence: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block))
+    alternative: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block)))
+  (if_expression
+    condition: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (identifier))
+    consequence: (integer_literal)
+    alternative: (integer_literal))
+  (if_expression
+    condition: (boolean_literal)
+    consequence: (identifier)
+    alternative: (identifier)))
+
+============================================
+While expression
+============================================
+
+while (a) {}
+
+outer: while (a) {}
+
+inline while (a) {}
+
+while (a) |value| {}
+
+while (a < b) : (a += 1) {}
+
+while (a) {} else {}
+
+while (a) {} else |err| {}
+
+---
+
+(source_file
+  (while_expression
+    condition: (identifier)
+    body: (block))
+  (while_expression
+    (loop_label
+      name: (label_identifier))
+    condition: (identifier)
+    body: (block))
+  (while_expression
+    (loop_modifier)
+    condition: (identifier)
+    body: (block))
+  (while_expression
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block))
+  (while_expression
+    condition: (binary_expression
+      left: (identifier)
+      operator: (binary_operator)
+      right: (identifier))
+    continue: (compound_assignment_expr
+      left: (identifier)
+      operator: (assignment_operator)
+      right: (integer_literal))
+    body: (block))
+  (while_expression
+    condition: (identifier)
+    body: (block)
+    alternative: (block))
+  (while_expression
+    condition: (identifier)
+    body: (block)
+    alternative: (payload_expression
+      (payload
+        values: (payload_identifier))
+      (block))))
+
+============================================
+For expression
+============================================
+
+for (xs) |value| {}
+inline for (xs) |value| {}
+label: for (xs) |value| {}
+label: inline for (xs) |value| {}
+
+for (xs) |value| {} else blk: {}
+
+---
+
+(source_file
+  (for_expression
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block))
+  (for_expression
+    (loop_modifier)
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block))
+  (for_expression
+    (loop_label
+      name: (label_identifier))
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block))
+  (for_expression
+    (loop_label
+      name: (label_identifier))
+    (loop_modifier)
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block))
+  (for_expression
+    condition: (identifier)
+    (payload
+      values: (payload_identifier))
+    body: (block)
+    alternative: (block
+      label: (loop_label
+        name: (label_identifier)))))
+
+============================================
+Continue and Break expression
+============================================
+
+continue;
+continue :blk;
+
+break;
+break 10;
+break val;
+break :blk;
+break :blk 1.1;
+break :blk "wut";
+
+---
+
+(source_file
+  (continue_expression)
+  (continue_expression
+    label: (loop_label_inverse
+      name: (label_identifier)))
+  (break_expression)
+  (break_expression
+    value: (integer_literal))
+  (break_expression
+    value: (identifier))
+  (break_expression
+    label: (loop_label_inverse
+      name: (label_identifier)))
+  (break_expression
+    label: (loop_label_inverse
+      name: (label_identifier))
+    value: (float_literal))
+  (break_expression
+    label: (loop_label_inverse
+      name: (label_identifier))
+    value: (string_literal)))
+
+============================================
+Return expression
+============================================
+
+return;
+
+return 125;
+
+---
+
+(source_file
+  (return_expression)
+  (return_expression
+    (integer_literal)))
+
+============================================
+Comptime Block expression
+============================================
+
+comptime {}
+
+comptime {
+  var x = 10;
+}
+
+comptime {
+  var x = 10;
+  x
+}
+
+---
+
+(source_file
+  (comptime_block
+    (block))
+
+  (comptime_block
+    (block
+      (assignment_statement
+        name: (identifier)
+        expression: (integer_literal))))
+
+  (comptime_block
+    (block
+      (assignment_statement
+        name: (identifier)
+        expression: (integer_literal))
+      (identifier))))
+
+============================================
+Array expression
+============================================
+
+[_]u8{};
+
+[4]u32{1, 2, 3, 4};
+
+[_][_]u64{
+    [_]u64{1, 2, 3, 4},
+    [_]u64{5, 6, 7, 8},
+};
+
+---
+
+(source_file
+  (array_expression
+    size: (identifier)
+    type: (primitive_type)
+    values: (array_values))
+  (array_expression
+    size: (integer_literal)
+    type: (primitive_type)
+    values: (array_values
+      (integer_literal)
+      (integer_literal)
+      (integer_literal)
+      (integer_literal)))
+  (array_expression
+    size: (identifier)
+    size: (identifier)
+    type: (primitive_type)
+    values: (array_values
+      (array_expression
+        size: (identifier)
+        type: (primitive_type)
+        values: (array_values
+          (integer_literal)
+          (integer_literal)
+          (integer_literal)
+          (integer_literal)))
+      (array_expression
+        size: (identifier)
+        type: (primitive_type)
+        values: (array_values
+          (integer_literal)
+          (integer_literal)
+          (integer_literal)
+          (integer_literal))))))
+
+============================================
+Anonymous Array expression
+============================================
+
+.{};
+
+.{1, 2, 3, 4};
+
+.{
+    .{1, 2, 3, 4},
+    .{5, 6, 7, 8},
+};
+
+---
+
+(source_file
+  (anonymous_array_expr)
+  (anonymous_array_expr
+    values: (array_values
+      (integer_literal))
+    values: (array_values
+      (integer_literal)
+      (integer_literal)
+      (integer_literal)))
+  (anonymous_array_expr
+    values: (array_values
+      (anonymous_array_expr
+        values: (array_values
+          (integer_literal))
+        values: (array_values
+          (integer_literal)
+          (integer_literal)
+          (integer_literal))))
+    values: (array_values
+      (anonymous_array_expr
+        values: (array_values
+          (integer_literal))
+        values: (array_values
+          (integer_literal)
+          (integer_literal)
+          (integer_literal))))
+    values: (array_values)))
+
+============================================
+Index expression
+============================================
+
+a[10];
+b[a];
+
+[_]u8{1, 2, 3}[1];
+
+.{1, 2, 3}[x];
+
+---
+
+(source_file
+  (index_expression
+    (identifier)
+    (integer_literal))
+  (index_expression
+    (identifier)
+    (identifier))
+  (index_expression
+    (array_expression
+      size: (identifier)
+      type: (primitive_type)
+      values: (array_values
+        (integer_literal)
+        (integer_literal)
+        (integer_literal)))
+    (integer_literal))
+  (index_expression
+    (anonymous_array_expr
+      values: (array_values
+        (integer_literal))
+      values: (array_values
+        (integer_literal)
+        (integer_literal)))
+    (identifier)))
+
+============================================
+Slice pattern expression
+============================================
+
+a[s..end];
+b[..];
+c[s..];
+d[..end];
+
+---
+
+(source_file
+  (index_expression
+    (identifier)
+    (slice_pattern
+      start: (identifier)
+      end: (identifier)))
+  (index_expression
+    (identifier)
+    (slice_pattern))
+  (index_expression
+    (identifier)
+    (slice_pattern
+      start: (identifier)))
+  (index_expression
+    (identifier)
+    (slice_pattern
+      end: (identifier))))
+
+============================================
+Field expression
+============================================
+
+a.b;
+
+find_pair().myfield;
+
+---
+
+(source_file
+  (field_expression
+    value: (identifier)
+    field: (field_identifier))
+  (field_expression
+    value: (call_expression
+      function: (identifier)
+      arguments: (arguments))
+    field: (field_identifier)))
+
+============================================
+Struct expression
+============================================
+
+struct { x: u8, y: u8 = 10, pub z: u8 };
+
+struct {
+    fn name() {}
+};
+
+struct {
+    x: u8,
+
+    pub fn init() {}
+};
+
+---
+
+(source_file
+  (struct_expression
+    field: (field_declaration
+      name: (field_identifier)
+      type: (primitive_type))
+    field: (field_declaration
+      name: (field_identifier)
+      type: (primitive_type)
+      default: (integer_literal))
+    field: (field_declaration
+      (visibility_modifier)
+      name: (field_identifier)
+      type: (primitive_type)))
+  (struct_expression
+    (function_declaration
+      name: (identifier)
+      parameters: (parameters)
+      body: (block)))
+  (struct_expression
+    field: (field_declaration
+      name: (field_identifier)
+      type: (primitive_type))
+    (function_declaration
+      (visibility_modifier)
+      name: (identifier)
+      parameters: (parameters)
+      body: (block))))
+
+============================================
+Struct construction expression
+============================================
+
+MyType {
+    .x = 10,
+    .y = 20,
+};
+
+---
+
+(source_file
+  (struct_construction
+    (type_identifier)
+    field: (field_init
+      name: (field_identifier)
+      value: (integer_literal))
+    field: (field_init
+      name: (field_identifier)
+      value: (integer_literal))))
+
+============================================
+Anonymous Struct/Enum expression
+============================================
+
+.{ .x = 10 };
+.{
+  .x = 10,
+  .y = .Var,
+};
+
+---
+
+(source_file
+  (anonymous_struct_enum
+    field: (field_init
+      name: (field_identifier)
+      value: (integer_literal)))
+  (anonymous_struct_enum
+    field: (field_init
+      name: (field_identifier)
+      value: (integer_literal))
+    field: (field_init
+      name: (field_identifier)
+      value: (enum_literal
+        variant: (enum_identifier)))))
+
+============================================
+Enum expression
+============================================
+
+enum {};
+
+enum { Ok, Err };
+
+enum (u2) { Zero, One, Two };
+
+enum { Zero = 0, One = 1};
+
+---
+
+(source_file
+  (enum_expression)
+  (enum_expression
+    variant: (variant_declaration
+      name: (enum_identifier))
+    variant: (variant_declaration
+      name: (enum_identifier)))
+  (enum_expression
+    type: (custom_number_type)
+    variant: (variant_declaration
+      name: (enum_identifier))
+    variant: (variant_declaration
+      name: (enum_identifier))
+    variant: (variant_declaration
+      name: (enum_identifier)))
+  (enum_expression
+    variant: (variant_declaration
+      name: (enum_identifier)
+      default: (integer_literal))
+    variant: (variant_declaration
+      name: (enum_identifier)
+      default: (integer_literal))))
+
+============================================
+Union expression
+============================================
+
+union {};
+union { Abc: u8 };
+union { Abc: u8, Def: Point, None};
+
+union (enum) {};
+union (MyEnum) {
+    Var1: u8,
+    Var2: u16,
+    Error,
+};
+
+union {
+    Var: u8,
+
+    fn myfunc() {}
+};
+
+---
+
+(source_file
+  (union_expression)
+  (union_expression
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (primitive_type)))
+  (union_expression
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (primitive_type))
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (type_identifier))
+    field_variant: (union_field_variant
+      name: (union_identifier)))
+  (union_expression
+    type: (inference_type))
+  (union_expression
+    type: (type_identifier)
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (primitive_type))
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (primitive_type))
+    field_variant: (union_field_variant
+      name: (union_identifier)))
+  (union_expression
+    field_variant: (union_field_variant
+      name: (union_identifier)
+      type: (primitive_type))
+    (function_declaration
+      name: (identifier)
+      parameters: (parameters)
+      body: (block))))
+
+============================================
+Switch expression
+============================================
+
+switch (a) {
+    1 => 1,
+    2, 3 => 3,
+    4...7 => 4,
+    else => 5,
+};
+
+switch (a) {
+    Var.A => 1,
+    Var.B => 2,
+};
+
+---
+
+(source_file
+  (switch_expression
+    value: (identifier)
+    body: (switch_block
+      (switch_arm
+        pattern: (switch_pattern
+          (literal_pattern
+            (integer_literal)))
+        value: (integer_literal))
+      (switch_arm
+        pattern: (switch_pattern
+          (literal_pattern
+            (integer_literal))
+          (literal_pattern
+            (integer_literal)))
+        value: (integer_literal))
+      (switch_arm
+        pattern: (switch_pattern
+          (slice_pattern
+            start: (integer_literal)
+            end: (integer_literal)))
+        value: (integer_literal))
+      (switch_last_arm
+        pattern: (else_switch)
+        value: (integer_literal))))
+  (switch_expression
+    value: (identifier)
+    body: (switch_block
+      (switch_arm
+        pattern: (switch_pattern
+          (field_pattern
+            value: (identifier)
+            field: (field_identifier)))
+        value: (integer_literal))
+      (switch_last_arm
+        pattern: (switch_pattern
+          (field_pattern
+            value: (identifier)
+            field: (field_identifier)))
+        value: (integer_literal)))))
+
+============================================
+Error expression
+============================================
+
+error {
+    Error1,
+    Error2,
+};
+
+error.Error;
+
+---
+
+(source_file
+  (error_expression
+    error_variant: (error_identifier)
+    error_variant: (error_identifier))
+  (error_expression
+    error_variant: (error_identifier)))
+
+============================================
+Test expression
+============================================
+
+test "mytest" {}
+
+test "assignment" {
+    foo();
+}
+
+---
+
+(source_file
+  (test_expression
+    test_name: (string_literal)
+    body: (block))
+  (test_expression
+    test_name: (string_literal)
+    body: (block
+      (call_expression
+        function: (identifier)
+        arguments: (arguments)))))
+
+============================================
+Usingnamespace expression
+============================================
+
+usingnamespace std;
+
+pub usingnamespace @cImport({
+    @cInclude("epoxy/gl.h");
+    @cInclude("GLFW/glfw3.h");
+    @cDefine("STBI_ONLY_PNG", "");
+    @cDefine("STBI_NO_STDIO", "");
+    @cInclude("stb_image.h");
+});
+
+---
+
+(source_file
+  (usingnamespace_expression
+    import: (identifier))
+  (usingnamespace_expression
+    (visibility_modifier)
+    import: (build_in_call_expr
+      function: (identifier)
+      arguments: (arguments
+        (block
+          (build_in_call_expr
+            function: (identifier)
+            arguments: (arguments
+              (string_literal)))
+          (build_in_call_expr
+            function: (identifier)
+            arguments: (arguments
+              (string_literal)))
+          (build_in_call_expr
+            function: (identifier)
+            arguments: (arguments
+              (string_literal)
+              (string_literal)))
+          (build_in_call_expr
+            function: (identifier)
+            arguments: (arguments
+              (string_literal)
+              (string_literal)))
+          (build_in_call_expr
+            function: (identifier)
+            arguments: (arguments
+              (string_literal))))))))

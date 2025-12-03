@@ -1,0 +1,62 @@
+name: "VS Code Light"
+
+# Core colors
+background: "#FFFFFF"
+foreground: "#000000"
+
+# State colors
+state_active: "#007ACC"
+state_selected: "#ADD6FF"
+state_hover: "#F5F5F5"
+state_disabled: "#237893"
+
+# Semantic UI colors
+ui_primary: "#0070C1"
+ui_secondary: "#237893"
+ui_accent: "#800080"
+ui_success: "#008000"
+ui_warning: "#795E26"
+ui_error: "#FF0000"
+ui_info: "#267F99"
+ui_border: "#E5E5E5"
+
+# Editor-specific
+cursor: "#000000"
+line_numbers: "#237893"
+line_numbers_active: "#0B216F"
+line_highlight: "#F5F5F5"
+
+# Status bar
+status_bar_bg: "#007ACC"
+status_bar_fg: "#FFFFFF"
+status_bar_active: "#FFFFFF"
+
+# Syntax highlighting
+keyword: "#0000FF"
+string_literal: "#A31515"
+number: "#098658"
+comment: "#008000"
+function_name: "#795E26"
+variable: "#001080"
+type: "#267F99"
+operator: "#000000"
+punctuation: "#000000"
+constant: "#267F99"
+namespace: "#267F99"
+property: "#001080"
+decorator: "#795E26"
+macro: "#800080"
+label: "#0000FF"
+
+# Markup
+markup_heading: "#0000FF"
+markup_bold: "#000000"
+markup_italic: "#A31515"
+markup_code: "#A31515"
+markup_code_block: "#A31515"
+markup_link: "#0070C1"
+markup_url: "#0070C1"
+markup_list: "#008000"
+markup_blockquote: "#008000"
+markup_strikethrough: "#FF0000"
+markup_quote: "#008000"

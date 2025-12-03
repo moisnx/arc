@@ -1,0 +1,62 @@
+name: "One Dark"
+
+# Core colors
+background: "#282C34"
+foreground: "#ABB2BF"
+
+# State colors
+state_active: "#61AFEF"
+state_selected: "#3E4451"
+state_hover: "#2C313C"
+state_disabled: "#495162"
+
+# Semantic UI colors
+ui_primary: "#61AFEF"
+ui_secondary: "#5C6370"
+ui_accent: "#C678DD"
+ui_success: "#98C379"
+ui_warning: "#D19A66"
+ui_error: "#E06C75"
+ui_info: "#56B6C2"
+ui_border: "#3E4451"
+
+# Editor-specific
+cursor: "#528BFF"
+line_numbers: "#495162"
+line_numbers_active: "#ABB2BF"
+line_highlight: "#2C313C"
+
+# Status bar
+status_bar_bg: "#21252B"
+status_bar_fg: "#ABB2BF"
+status_bar_active: "#61AFEF"
+
+# Syntax highlighting
+keyword: "#C678DD"
+string_literal: "#98C379"
+number: "#D19A66"
+comment: "#5C6370"
+function_name: "#61AFEF"
+variable: "#E06C75"
+type: "#E5C07B"
+operator: "#56B6C2"
+punctuation: "#ABB2BF"
+constant: "#E5C07B"
+namespace: "#E5C07B"
+property: "#E06C75"
+decorator: "#61AFEF"
+macro: "#C678DD"
+label: "#C678DD"
+
+# Markup
+markup_heading: "#C678DD"
+markup_bold: "#ABB2BF"
+markup_italic: "#98C379"
+markup_code: "#61AFEF"
+markup_code_block: "#61AFEF"
+markup_link: "#61AFEF"
+markup_url: "#61AFEF"
+markup_list: "#98C379"
+markup_blockquote: "#5C6370"
+markup_strikethrough: "#E06C75"
+markup_quote: "#5C6370"

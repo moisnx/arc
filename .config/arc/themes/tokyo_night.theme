@@ -1,0 +1,65 @@
+# semantic.theme - Tokyo Night adapted with semantic UI
+name: "Tokyo Night (Semantic)"
+
+# Core colors
+background: "transparent"
+foreground: "#A9B1D6"
+
+# 🌟 State colors - Reusable across ALL UI components
+# Mapped to Tokyo Night's functional colors
+state_active: "#7AA2F7"
+state_selected: "#283457"
+state_hover: "#24283B"
+state_disabled: "#565F89"
+
+# 🛠️ Semantic UI colors - Reusable by meaning
+# Mapped based on color and common association
+ui_primary: "#7AA2F7"
+ui_secondary: "#A9B1D6"
+ui_accent: "#BB9AF7"
+ui_success: "#9ECE6A"
+ui_warning: "#FF9E64"
+ui_error: "#F7768E"
+ui_info: "#0DB9D7"
+ui_border: "#3B4261"
+
+# 📝 Editor-specific
+cursor: "#C0CAF5"
+line_numbers: "#3B4261"
+line_numbers_active: "#737AA2"
+line_highlight: "#24283B"
+
+# 📊 Status bar (Kept to maintain TN feel, but using semantic for active)
+status_bar_bg: "#1E202E"
+status_bar_fg: "#A9B1D6"
+status_bar_active: "#7AA2F7" 
+
+# 💡 Syntax highlighting (Kept original Tokyo Night values)
+keyword: "#BB9AF7"
+string_literal: "#9ECE6A"
+number: "#FF9E64"
+comment: "#565F89"
+function_name: "#7AA2F7"
+variable: "#A9B1D6"
+type: "#0DB9D7"
+operator: "#89DDFF"
+punctuation: "#A9B1D6"
+constant: "#0DB9D7"
+namespace: "#0DB9D7"
+property: "#A9B1D6"
+decorator: "#7AA2F7"
+macro: "#BB9AF7"
+label: "#BB9AF7"
+
+# 📑 Markup (Kept original Tokyo Night values)
+markup_heading: "#BB9AF7"
+markup_bold: "#C0CAF5"
+markup_italic: "#9ECE6A"
+markup_code: "#7AA2F7"
+markup_code_block: "#7AA2F7"
+markup_link: "#7AA2F7"
+markup_url: "#7AA2F7"
+markup_list: "#9ECE6A"
+markup_blockquote: "#565F89"
+markup_strikethrough: "#F7768E"
+markup_quote: "#565F89"
