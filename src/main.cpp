@@ -13,7 +13,6 @@ int main(int argc, char *argv[])
 {
   install_signal_handlers();
 
-  // std::cerr.flush();
   try
   {
     ProgramArgs args = ProgramArgs::parse(argc, argv);

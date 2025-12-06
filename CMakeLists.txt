@@ -349,6 +349,8 @@ else()
     set(EFSW_LIBRARIES "")
 endif()
 
+
+
 # ----------------------------------------
 # FLUX
 # -----------------------------
@@ -733,6 +735,9 @@ else()
     message(STATUS "Compiling without Tree-sitter support")
 endif()
 
+# Find magika
+find_package(magika REQUIRED)
+
 # Link libraries
 target_link_libraries(arc PRIVATE
     yaml-cpp::yaml-cpp
@@ -740,6 +745,7 @@ target_link_libraries(arc PRIVATE
     ${TS_LIBRARIES}
     ${EFSW_LIBRARIES}
     ${FLUX_LIBRARIES}
+    magika::magika
 )
 
 if(WIN32)

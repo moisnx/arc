@@ -160,6 +160,16 @@ public:
   bool hasSelection = false;
   bool isSelecting = false;
 
+  void startSelection(int line, int col);
+  void extendSelection(int line, int col);
+  void finalizeSelection();
+  bool isSelectionActive() const { return isSelecting || hasSelection; }
+  int getCursorLine() const { return cursorLine; }
+  int getCursorCol() const { return cursorCol; }
+
+  bool mouseToFilePos(int mouseRow, int mouseCol, int &fileRow, int &fileCol);
+  void updateCursorAndViewport(int newLine, int newCol);
+
   // Editor cursor
   void setCursorMode();
   CursorMode getCursorMode() const { return currentMode; };
@@ -196,6 +206,7 @@ public:
   void displayImageViewerRawMode();
   void displayImageError(const std::string &message);
   bool isImageFile(const std::string &path) const;
+  std::string find_magika_models();
 
 private:
   // Core data
@@ -252,8 +263,6 @@ private:
   std::string expandTabs(const std::string &line, int tabSize = 4);
   std::string getFileExtension();
   bool isPositionSelected(int line, int col);
-  bool mouseToFilePos(int mouseRow, int mouseCol, int &fileRow, int &fileCol);
-  void updateCursorAndViewport(int newLine, int newCol);
   void markModified();
   void splitLineAtCursor();
   void joinLineWithNext();
@@ -270,12 +279,12 @@ private:
 
   void autoIndentCurrentLine();
   void adjustIndentForClosingBracket();
-  void adjustIndentForPythonDedent(); 
+  void adjustIndentForPythonDedent();
   bool isLineOnlyWhitespace(const std::string &line);
   std::string getIndentString(int spaces);
   int countIndentSpaces(const std::string &line);
   void pasteWithSmartIndent(const std::string &text);
-  bool shouldTriggerDedent(char ch); 
+  bool shouldTriggerDedent(char ch);
 
   bool isBinaryFile = false;
 

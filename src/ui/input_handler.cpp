@@ -381,12 +381,9 @@ bool InputHandler::handleEditingKey(int key)
   }
 }
 
-// ----------------------------------------------------------------------
-// Movement Keys
-// ----------------------------------------------------------------------
-
 bool InputHandler::handleMovementKey(int key)
 {
+  // Detect if Shift is held using multiple methods for cross-platform reliability
   bool extending_selection = false;
 
 #ifdef _WIN32
@@ -396,13 +393,13 @@ bool InputHandler::handleMovementKey(int key)
   }
 #endif
 
-  // Check for shift-modified arrow keys
+  // Check for shift-modified arrow keys (ncurses keycodes)
   switch (key)
   {
-  case KEY_SLEFT:
-  case KEY_SRIGHT:
-  case KEY_SR:
-  case KEY_SF:
+  case KEY_SLEFT:   // Shift+Left
+  case KEY_SRIGHT:  // Shift+Right
+  case KEY_SR:      // Shift+Up
+  case KEY_SF:      // Shift+Down
 #ifdef _WIN32
   case KEY_SUP:
   case KEY_SDOWN:
@@ -411,18 +408,31 @@ bool InputHandler::handleMovementKey(int key)
     break;
   }
 
-  // Determine if this is a movement key
+  // Determine base movement key (remove shift modifier)
+  int baseKey = key;
+  if (extending_selection)
+  {
+    switch (key)
+    {
+    case KEY_SLEFT:  baseKey = KEY_LEFT; break;
+    case KEY_SRIGHT: baseKey = KEY_RIGHT; break;
+    case KEY_SR:     baseKey = KEY_UP; break;
+    case KEY_SF:     baseKey = KEY_DOWN; break;
+#ifdef _WIN32
+    case KEY_SUP:    baseKey = KEY_UP; break;
+    case KEY_SDOWN:  baseKey = KEY_DOWN; break;
+#endif
+    }
+  }
+
+  // Check if this is a movement key
   bool is_movement_key = false;
-  switch (key)
+  switch (baseKey)
   {
   case KEY_LEFT:
-  case KEY_SLEFT:
   case KEY_RIGHT:
-  case KEY_SRIGHT:
   case KEY_UP:
-  case KEY_SR:
   case KEY_DOWN:
-  case KEY_SF:
   case KEY_HOME:
   case KEY_END:
   case KEY_PPAGE:
@@ -432,8 +442,6 @@ bool InputHandler::handleMovementKey(int key)
   case PDC_KEY_RIGHT:
   case PDC_KEY_UP:
   case PDC_KEY_DOWN:
-  case KEY_SUP:
-  case KEY_SDOWN:
 #endif
     is_movement_key = true;
     break;
@@ -444,23 +452,27 @@ bool InputHandler::handleMovementKey(int key)
     return false;
   }
 
-  // Handle selection state
+  // === SELECTION LOGIC ===
   if (extending_selection)
   {
-    editor_.startSelectionIfNeeded();
+    // Start selection if not already selecting
+    if (!editor_.isSelectionActive())
+    {
+      editor_.startSelection(editor_.getCursorLine(), editor_.getCursorCol());
+    }
   }
   else
   {
+    // Moving without shift - clear selection
     editor_.clearSelection();
   }
 
-  // Handle the actual movement
+  // === PERFORM MOVEMENT ===
   bool moved = false;
 
-  switch (key)
+  switch (baseKey)
   {
   case KEY_LEFT:
-  case KEY_SLEFT:
 #ifdef _WIN32
   case PDC_KEY_LEFT:
 #endif
@@ -469,7 +481,6 @@ bool InputHandler::handleMovementKey(int key)
     break;
 
   case KEY_RIGHT:
-  case KEY_SRIGHT:
 #ifdef _WIN32
   case PDC_KEY_RIGHT:
 #endif
@@ -478,20 +489,16 @@ bool InputHandler::handleMovementKey(int key)
     break;
 
   case KEY_UP:
-  case KEY_SR:
 #ifdef _WIN32
   case PDC_KEY_UP:
-  case KEY_SUP:
 #endif
     editor_.moveCursorUp();
     moved = true;
     break;
 
   case KEY_DOWN:
-  case KEY_SF:
 #ifdef _WIN32
   case PDC_KEY_DOWN:
-  case KEY_SDOWN:
 #endif
     editor_.moveCursorDown();
     moved = true;
@@ -518,9 +525,10 @@ bool InputHandler::handleMovementKey(int key)
     break;
   }
 
+  // Update selection end point if extending
   if (moved && extending_selection)
   {
-    editor_.updateSelectionEnd();
+    editor_.extendSelection(editor_.getCursorLine(), editor_.getCursorCol());
   }
 
   return moved;
@@ -533,13 +541,119 @@ bool InputHandler::handleMovementKey(int key)
 InputHandler::KeyResult InputHandler::handleMouseEvent()
 {
   MEVENT event;
-  if (GETMOUSE_FUNC(&event) == OK)
+  if (GETMOUSE_FUNC(&event) != OK)
   {
-    editor_.handleMouse(event);
+    return KeyResult::NOT_HANDLED;
+  }
+
+  // === BUTTON1_PRESSED: Start potential selection ===
+  if (event.bstate & BUTTON1_PRESSED)
+  {
+    int fileRow, fileCol;
+    if (!editor_.mouseToFilePos(event.y, event.x, fileRow, fileCol))
+    {
+      return KeyResult::NOT_HANDLED;
+    }
+
+    // Store click position for drag detection
+    mouseState_.clickStartX = event.x;
+    mouseState_.clickStartY = event.y;
+    mouseState_.wasClick = true;
+    mouseState_.isDragging = false;
+
+    // ALWAYS start fresh selection on mouse press
+    editor_.clearSelection();
+    editor_.startSelection(fileRow, fileCol);
+    editor_.updateCursorAndViewport(fileRow, fileCol);
+
     return KeyResult::REDRAW;
   }
+
+  // === REPORT_MOUSE_POSITION: Drag to extend selection ===
+  if (event.bstate & REPORT_MOUSE_POSITION)
+  {
+    // Check if button 1 is still held (dragging)
+    if (mouseState_.clickStartX >= 0)
+    {
+      // Calculate distance from click start
+      int dx = abs(event.x - mouseState_.clickStartX);
+      int dy = abs(event.y - mouseState_.clickStartY);
+
+      // If moved beyond threshold, it's a drag
+      if (dx > MouseState::DRAG_THRESHOLD || dy > MouseState::DRAG_THRESHOLD)
+      {
+        mouseState_.isDragging = true;
+        mouseState_.wasClick = false;
+
+        int fileRow, fileCol;
+        if (editor_.mouseToFilePos(event.y, event.x, fileRow, fileCol))
+        {
+          editor_.extendSelection(fileRow, fileCol);
+          editor_.updateCursorAndViewport(fileRow, fileCol);
+          return KeyResult::REDRAW;
+        }
+      }
+    }
+  }
+
+  // === BUTTON1_RELEASED: Finalize or cancel selection ===
+  if (event.bstate & BUTTON1_RELEASED)
+  {
+    int fileRow, fileCol;
+    if (editor_.mouseToFilePos(event.y, event.x, fileRow, fileCol))
+    {
+      if (mouseState_.isDragging)
+      {
+        // Complete the drag selection
+        editor_.extendSelection(fileRow, fileCol);
+        editor_.finalizeSelection();
+      }
+      else if (mouseState_.wasClick)
+      {
+        // Just a click - clear selection and move cursor
+        editor_.clearSelection();
+      }
+
+      editor_.updateCursorAndViewport(fileRow, fileCol);
+    }
+
+    // Reset mouse state
+    mouseState_.clickStartX = -1;
+    mouseState_.clickStartY = -1;
+    mouseState_.isDragging = false;
+    mouseState_.wasClick = false;
+
+    return KeyResult::REDRAW;
+  }
+
+  // === BUTTON1_CLICKED: Pure click (no drag) ===
+  if (event.bstate & BUTTON1_CLICKED)
+  {
+    int fileRow, fileCol;
+    if (editor_.mouseToFilePos(event.y, event.x, fileRow, fileCol))
+    {
+      editor_.clearSelection();
+      editor_.updateCursorAndViewport(fileRow, fileCol);
+      return KeyResult::REDRAW;
+    }
+  }
+
+  // === SCROLL WHEEL ===
+  if (event.bstate & BUTTON4_PRESSED)
+  {
+    editor_.scrollUp();
+    return KeyResult::REDRAW;
+  }
+
+  if (event.bstate & BUTTON5_PRESSED)
+  {
+    editor_.scrollDown();
+    return KeyResult::REDRAW;
+  }
+
   return KeyResult::NOT_HANDLED;
 }
+
 
 InputHandler::KeyResult InputHandler::handleResizeEvent()
 {

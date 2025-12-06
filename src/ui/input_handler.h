@@ -25,6 +25,13 @@ public:
     QUIT,        // User requested quit
     REDRAW       // Screen needs redraw
   };
+  struct MouseState {
+    bool isDragging = false;
+    bool wasClick = true;
+    int clickStartX = -1;
+    int clickStartY = -1;
+    static constexpr int DRAG_THRESHOLD = 2; // pixels before it's considered a drag
+  };
 
   explicit InputHandler(Editor &editor);
 
@@ -39,6 +46,8 @@ public:
 private:
   Editor &editor_;
   bool mouse_enabled_;
+  MouseState mouseState_;
+
 
   // Sequence
   int pending_sequence_key_ = 0;

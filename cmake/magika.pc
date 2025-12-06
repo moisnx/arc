@@ -1,0 +1,9 @@
+prefix=/usr/local
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: magika
+Description: AI-powered file type detection
+Version: 1.0.0
+Cflags: -I${includedir}
+Libs: -L${libdir} -lmagika

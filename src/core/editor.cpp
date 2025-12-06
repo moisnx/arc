@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #ifdef _WIN32
 #include <curses.h>
 #include <windows.h>
@@ -18,6 +19,7 @@
 #endif
 #include "src/utils/binary_detector.h"
 #include <iostream>
+#include <magika/magika.hpp>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -227,36 +229,43 @@ bool Editor::isPositionSelected(int line, int col)
   if (!hasSelection && !isSelecting)
     return false;
 
-  int startL = selectionStartLine;
-  int startC = selectionStartCol;
-  int endL = selectionEndLine;
-  int endC = selectionEndCol;
+  auto [start, end] = getNormalizedSelection();
+  int startL = start.first;
+  int startC = start.second;
+  int endL = end.first;
+  int endC = end.second;
 
-  if (startL > endL || (startL == endL && startC > endC))
-  {
-    std::swap(startL, endL);
-    std::swap(startC, endC);
-  }
-
-  if (line < startL || line > endL)
+  // Single point selection (no actual selection)
+  if (startL == endL && startC == endC)
     return false;
 
-  if (startL == endL)
+  // Before selection
+  if (line < startL)
+    return false;
+
+  // After selection
+  if (line > endL)
+    return false;
+
+  // On start line
+  if (line == startL && line == endL)
   {
     return col >= startC && col < endC;
   }
-  else if (line == startL)
+
+  if (line == startL)
   {
     return col >= startC;
   }
-  else if (line == endL)
+
+  // On end line
+  if (line == endL)
   {
     return col < endC;
   }
-  else
-  {
-    return true;
-  }
+
+  // Between start and end lines
+  return true;
 }
 
 void Editor::positionCursor()
@@ -290,6 +299,7 @@ bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
   int rows, cols;
   getmaxyx(stdscr, rows, cols);
 
+  // Don't process clicks on status bar
   if (mouseRow >= rows - 1)
     return false;
 
@@ -298,20 +308,33 @@ bool Editor::mouseToFilePos(int mouseRow, int mouseCol, int &fileRow,
       show_line_numbers ? std::to_string(buffer.getLineCount()).length() : 0;
   int contentStartCol = show_line_numbers ? (lineNumWidth + 3) : 0;
 
+  // Clicks in line number area should still work
   if (mouseCol < contentStartCol)
   {
     mouseCol = contentStartCol;
   }
 
+  // Convert screen row to file row
   fileRow = viewportTop + mouseRow;
+
+  // Clamp to valid line range
   if (fileRow < 0)
     fileRow = 0;
   if (fileRow >= buffer.getLineCount())
     fileRow = buffer.getLineCount() - 1;
 
+  // Convert screen col to file col
   fileCol = viewportLeft + (mouseCol - contentStartCol);
+
+  // Clamp to valid column range (allow position at end of line)
   if (fileCol < 0)
     fileCol = 0;
+
+  std::string line = buffer.getLine(fileRow);
+  int lineLen = static_cast<int>(line.length());
+
+  if (fileCol > lineLen)
+    fileCol = lineLen;
 
   return true;
 }
@@ -371,7 +394,6 @@ void Editor::displayBinaryWarning()
 
   int centerRow = rows / 2 - 4;
   int centerCol = cols / 2;
-
 
   // Top border with ERROR color
   attron(COLOR_PAIR(ColorPairs::UI_ERROR) | A_BOLD);
@@ -471,10 +493,6 @@ void Editor::displayBinaryWarning()
   doupdate();
 }
 
-// =================================================================
-// Unsaved Changes Modal with Proper Overlay Effect
-// =================================================================
-
 UnsavedModalResult Editor::displayUnsavedChangesModal()
 {
   if (!isModified)
@@ -486,8 +504,6 @@ UnsavedModalResult Editor::displayUnsavedChangesModal()
   // Draw the modal
   auto drawModal = [&]()
   {
-    // DON'T clear the screen - we want to show the editor content behind
-    // Just display the current editor state first
     display();
 
     int centerRow = rows / 2 - 6;
@@ -495,8 +511,6 @@ UnsavedModalResult Editor::displayUnsavedChangesModal()
     int modalWidth = 56;
     int modalLeft = centerCol - (modalWidth / 2);
 
-    // Draw semi-transparent dark overlay ONLY around the modal area
-    // Create a "dimmed" effect by drawing with a darker color pair
     attrset(COLOR_PAIR(ColorPairs::STATE_DISABLED));
 
     // Draw overlay above modal
@@ -533,8 +547,6 @@ UnsavedModalResult Editor::displayUnsavedChangesModal()
       }
     }
 
-    // Now draw the modal box with solid background
-    // Fill modal background
     attrset(COLOR_PAIR(ColorPairs::BACKGROUND_PAIR));
     for (int i = centerRow; i < centerRow + 16; i++)
     {
@@ -553,7 +565,7 @@ UnsavedModalResult Editor::displayUnsavedChangesModal()
     {
       mvprintw(centerRow, modalLeft + i, "%lc", L'═');
     }
-    // FIX: Replaced addch(L'╗') with mvprintw(..., "%lc", L'╗')
+
     mvprintw(centerRow, modalLeft + modalWidth - 1, "%lc", L'╗');
     attroff(COLOR_PAIR(ColorPairs::UI_WARNING) | A_BOLD);
 
@@ -873,11 +885,9 @@ void Editor::display()
       addch(' ');
     }
 
-   
     std::string rawLine = buffer.getLine(i);
     std::string expandedLine = expandTabs(rawLine, currentTabSize);
 
-   
     std::string displayLine = expandedLine;
     std::vector<ColorSpan> markdownSpans;
     int leftPadding = 0;
@@ -1336,6 +1346,16 @@ void Editor::clearSelection()
   selectionEndCol = 0;
 }
 
+void Editor::startSelectionIfNeeded()
+{
+  if (!hasSelection && !isSelecting)
+  {
+    startSelection(cursorLine, cursorCol);
+  }
+}
+
+void Editor::updateSelectionEnd() { extendSelection(cursorLine, cursorCol); }
+
 void Editor::moveCursorUp()
 {
   if (cursorLine > 0)
@@ -1358,7 +1378,6 @@ void Editor::moveCursorUp()
       }
     }
   }
-  // Note: Selection handling now done in InputHandler
 }
 
 void Editor::moveCursorDown()
@@ -1494,9 +1513,6 @@ void Editor::moveCursorToLineStart()
   {
     viewportLeft = 0;
   }
-
-  // Selection handling is done in InputHandler, not here
-  // This method just moves the cursor
 }
 
 void Editor::moveCursorToLineEnd()
@@ -1519,9 +1535,6 @@ void Editor::moveCursorToLineEnd()
     if (viewportLeft < 0)
       viewportLeft = 0;
   }
-
-  // Selection handling is done in InputHandler, not here
-  // This method just moves the cursor
 }
 
 void Editor::scrollUp(int linesToScroll)
@@ -1694,11 +1707,56 @@ bool Editor::validateEditorState()
   return valid;
 }
 
+std::string Editor::find_magika_models()
+{
+  // Try environment variable first
+  if (const char *env_path = std::getenv("MAGIKA_MODEL_PATH"))
+  {
+    if (fs::exists(env_path))
+    {
+      return env_path;
+    }
+  }
+
+  // Try common install locations
+  std::vector<std::string> search_paths = {
+      "/usr/local/share/magika/models/standard_v3_3",
+      "/usr/share/magika/models/standard_v3_3",
+      "../../assets/models/standard_v3_3", // Development build
+      "./models/standard_v3_3",            // Bundled
+      "../models/standard_v3_3"            // Build directory
+  };
+
+  for (const auto &path : search_paths)
+  {
+    if (fs::exists(path + "/model.onnx"))
+    {
+      return path;
+    }
+  }
+
+  throw std::runtime_error(
+      "Magika models not found. Tried:\n" +
+      std::accumulate(search_paths.begin(), search_paths.end(), std::string(),
+                      [](const std::string &a, const std::string &b)
+                      { return a + "  - " + b + "\n"; }) +
+      "\nInstall with: sudo cmake --install build\n"
+      "Or set MAGIKA_MODEL_PATH=/path/to/models/standard_v3_3");
+}
+
 bool Editor::loadFile(const std::string &fname)
 {
   filename = fname;
+  // Magika("/path/to/models/standard_v3_3");
+  std::string model_path = find_magika_models();
+  // std::cerr << "Model: " << model_path << std::endl;
+  static magika::Magika detector(model_path);
 
-  if (BinaryDetector::shouldTreatAsBinary(filename))
+  auto result = detector.identify_path(filename);
+
+  // std::cerr << "File Data" << result.group << std::endl;
+  if (!(result.group == "text" || result.group == "code" ||
+        result.group == "inode"))
   {
     isBinaryFile = true;
     buffer.clear();
@@ -2836,7 +2894,7 @@ Editor::getNormalizedSelection()
   int endLine = selectionEndLine;
   int endCol = selectionEndCol;
 
-  // Always normalize so start < end
+  // Normalize so start is always before end
   if (startLine > endLine || (startLine == endLine && startCol > endCol))
   {
     std::swap(startLine, endLine);
@@ -2921,25 +2979,51 @@ std::string Editor::getSelectedText()
 }
 
 // Selection management
-void Editor::startSelectionIfNeeded()
+void Editor::startSelection(int line, int col)
 {
-  if (!hasSelection && !isSelecting)
+  // Start a new selection at the given position
+  selectionStartLine = line;
+  selectionStartCol = col;
+  selectionEndLine = line;
+  selectionEndCol = col;
+
+  isSelecting = true;
+  hasSelection = false; // Not finalized yet
+}
+
+void Editor::extendSelection(int line, int col)
+{
+  if (!isSelecting && !hasSelection)
   {
-    isSelecting = true;
-    selectionStartLine = cursorLine;
-    selectionStartCol = cursorCol;
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
+    // Start selection if not already started
+    startSelection(line, col);
+    return;
+  }
+
+  // Update end point
+  selectionEndLine = line;
+  selectionEndCol = col;
+
+  // Auto-finalize if different from start (there's actual content selected)
+  if (selectionStartLine != selectionEndLine ||
+      selectionStartCol != selectionEndCol)
+  {
+    hasSelection = true;
   }
 }
 
-void Editor::updateSelectionEnd()
+void Editor::finalizeSelection()
 {
-  if (isSelecting || hasSelection)
+  // Only keep selection if start != end
+  if (selectionStartLine == selectionEndLine &&
+      selectionStartCol == selectionEndCol)
   {
-    selectionEndLine = cursorLine;
-    selectionEndCol = cursorCol;
+    clearSelection();
+  }
+  else
+  {
     hasSelection = true;
+    isSelecting = false;
   }
 }
 
@@ -3087,15 +3171,13 @@ void Editor::selectAll()
   if (buffer.getLineCount() == 0)
     return;
 
-  selectionStartLine = 0;
-  selectionStartCol = 0;
+  startSelection(0, 0);
 
-  selectionEndLine = buffer.getLineCount() - 1;
-  std::string lastLine = buffer.getLine(selectionEndLine);
-  selectionEndCol = static_cast<int>(lastLine.length());
+  int lastLine = buffer.getLineCount() - 1;
+  std::string lastLineContent = buffer.getLine(lastLine);
 
-  hasSelection = true;
-  isSelecting = false;
+  extendSelection(lastLine, static_cast<int>(lastLineContent.length()));
+  finalizeSelection();
 }
 
 void Editor::initializeViewportHighlighting()
