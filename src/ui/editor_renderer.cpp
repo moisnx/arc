@@ -369,14 +369,14 @@ void EditorRenderer::drawStatusBar(const RenderContext &ctx,
 
   // === CENTER SECTION ===
   // Git branch (placeholder for future implementation)
-  int centerStart = cols / 2 - 10;
-  if (centerStart > currentCol + 5)
-  {
-    move(statusRow, centerStart);
-    attron(COLOR_PAIR(ColorPairs::UI_INFO));
-    printw("  main");
-    attroff(COLOR_PAIR(ColorPairs::UI_INFO));
-  }
+  //   int centerStart = cols / 2 - 10;
+  //   if (centerStart > currentCol + 5)
+  //   {
+  //     move(statusRow, centerStart);
+  //     attron(COLOR_PAIR(ColorPairs::UI_INFO));
+  //     printw("  main");
+  //     attroff(COLOR_PAIR(ColorPairs::UI_INFO));
+  //   }
 
   // === RIGHT SECTION ===
   std::string rightSection;

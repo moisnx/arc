@@ -1203,7 +1203,8 @@ bool Editor::loadFile(const std::string &fname)
 
     // Force immediate re-highlight
     syntaxHighlighter->invalidateLineRange(0, buffer.getLineCount());
-    syntaxHighlighter->forceFullReparse(buffer);
+    // Schedule background parse
+    syntaxHighlighter->scheduleBackgroundParse(buffer);
   }
 
   history_.clear(); // Reset undo history
