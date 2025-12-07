@@ -40,7 +40,7 @@ InputHandler::InputHandler(Editor &editor)
 
 InputHandler::KeyResult InputHandler::handleKey(int key)
 {
-  if (editor_.getIsBinary() && key != CTRL('q') && key != KEY_RESIZE)
+  if (editor_.isBinary() && key != CTRL('q') && key != KEY_RESIZE)
     return KeyResult::NOT_HANDLED;
 
   // Handle special events first
@@ -113,7 +113,7 @@ InputHandler::handleGlobalShortcut(int key)
     if (editor_.hasUnsavedChanges())
     {
       // Show modal and get user decision
-      UnsavedModalResult result = editor_.displayUnsavedChangesModal();
+      UnsavedModalResult result = editor_.handleUnsavedChangesModal();
 
       switch (result)
       {
@@ -383,7 +383,8 @@ bool InputHandler::handleEditingKey(int key)
 
 bool InputHandler::handleMovementKey(int key)
 {
-  // Detect if Shift is held using multiple methods for cross-platform reliability
+  // Detect if Shift is held using multiple methods for cross-platform
+  // reliability
   bool extending_selection = false;
 
 #ifdef _WIN32
@@ -396,10 +397,10 @@ bool InputHandler::handleMovementKey(int key)
   // Check for shift-modified arrow keys (ncurses keycodes)
   switch (key)
   {
-  case KEY_SLEFT:   // Shift+Left
-  case KEY_SRIGHT:  // Shift+Right
-  case KEY_SR:      // Shift+Up
-  case KEY_SF:      // Shift+Down
+  case KEY_SLEFT:  // Shift+Left
+  case KEY_SRIGHT: // Shift+Right
+  case KEY_SR:     // Shift+Up
+  case KEY_SF:     // Shift+Down
 #ifdef _WIN32
   case KEY_SUP:
   case KEY_SDOWN:
@@ -414,13 +415,25 @@ bool InputHandler::handleMovementKey(int key)
   {
     switch (key)
     {
-    case KEY_SLEFT:  baseKey = KEY_LEFT; break;
-    case KEY_SRIGHT: baseKey = KEY_RIGHT; break;
-    case KEY_SR:     baseKey = KEY_UP; break;
-    case KEY_SF:     baseKey = KEY_DOWN; break;
+    case KEY_SLEFT:
+      baseKey = KEY_LEFT;
+      break;
+    case KEY_SRIGHT:
+      baseKey = KEY_RIGHT;
+      break;
+    case KEY_SR:
+      baseKey = KEY_UP;
+      break;
+    case KEY_SF:
+      baseKey = KEY_DOWN;
+      break;
 #ifdef _WIN32
-    case KEY_SUP:    baseKey = KEY_UP; break;
-    case KEY_SDOWN:  baseKey = KEY_DOWN; break;
+    case KEY_SUP:
+      baseKey = KEY_UP;
+      break;
+    case KEY_SDOWN:
+      baseKey = KEY_DOWN;
+      break;
 #endif
     }
   }
@@ -653,7 +666,6 @@ InputHandler::KeyResult InputHandler::handleMouseEvent()
 
   return KeyResult::NOT_HANDLED;
 }
-
 
 InputHandler::KeyResult InputHandler::handleResizeEvent()
 {

@@ -39,8 +39,8 @@ int EditorMode::run(const std::string &filename, const ProgramArgs &args)
   }
 
   Editor editor(highlighterPtr);
-  editor.setDeltaUndoEnabled(true);
-  editor.beginDeltaGroup();
+  // editor.setDeltaUndoEnabled(true);
+  // editor.beginDeltaGroup();
 
   if (!editor.loadFile(filename))
   {

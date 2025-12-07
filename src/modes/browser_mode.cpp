@@ -160,8 +160,8 @@ int BrowserMode::run(const std::string &folder_path)
         }
 
         Editor editor(highlighterPtr);
-        editor.setDeltaUndoEnabled(true);
-        editor.beginDeltaGroup();
+        // editor.setDeltaUndoEnabled(true);
+        // editor.beginDeltaGroup();
 
         if (!editor.loadFile(selectedPath))
         {

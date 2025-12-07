@@ -1,11 +1,12 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
-#include "src/features/indent_manager.h"
-#include "src/features/markdown_renderer.h"
+#include "src/core/file_manager.h"
+#include "src/ui/editor_renderer.h"
+
 #include <memory>
-#include <stack>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <curses.h>
@@ -13,26 +14,22 @@
 #include <ncursesw/ncurses.h>
 #endif
 
+// Core Systems
 #include "buffer.h"
 #include "editor_delta.h"
 #include "editor_validation.h"
-#include "src/features/syntax_highlighter.h"
+#include "src/core/history_manager.h"
 
-// Undo/Redo system
-struct EditorState
-{
-  std::string content;
-  int cursorLine;
-  int cursorCol;
-  int viewportTop;
-  int viewportLeft;
-};
+// Features
+#include "src/features/indent_manager.h"
+#include "src/features/markdown_renderer.h"
+#include "src/features/syntax_highlighter.h"
 
 enum class UnsavedModalResult
 {
-  SAVE_AND_QUIT,     // User chose to save
-  QUIT_WITHOUT_SAVE, // User chose to quit without saving
-  CANCEL             // User cancelled (ESC)
+  SAVE_AND_QUIT,
+  QUIT_WITHOUT_SAVE,
+  CANCEL
 };
 
 enum CursorMode
@@ -47,13 +44,14 @@ class Editor
 public:
   struct RenderSpan
   {
-    int start;       // Screen column start
-    int end;         // Screen column end
-    int colorPair;   // Color pair to use
-    int attribute;   // Attribute flags
-    bool isSelected; // Whether this span is selected
+    int start;
+    int end;
+    int colorPair;
+    int attribute;
+    bool isSelected;
   };
 
+  // Rendering (To be moved to EditorRenderer later)
   std::vector<RenderSpan>
   buildRenderSpans(const std::string &line,
                    const std::vector<ColorSpan> &highlightSpans,
@@ -63,43 +61,31 @@ public:
 
   // Core API
   Editor(SyntaxHighlighter *highlighter);
-  // SyntaxHighlighter highlighter;
-  void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
 
+  void setSyntaxHighlighter(SyntaxHighlighter *highlighter);
   SyntaxHighlighter *getSyntaxHighlighter() { return syntaxHighlighter; }
+
   bool loadFile(const std::string &fname);
   bool saveFile();
   void display();
-  UnsavedModalResult displayUnsavedChangesModal();
+  UnsavedModalResult handleUnsavedChangesModal();
   void drawStatusBar();
   void handleResize();
   void handleMouse(MEVENT &event);
 
   std::string getFilename() const { return filename; }
   std::string getFirstLine() const { return buffer.getLine(0); }
-  void toggleMarkdownRendering()
-  {
-    if (markdownRenderer_)
-    {
-      markdownRenderer_->setEnabled(!markdownRenderer_->isEnabled());
-      updateMarkdownRendering();
-    }
-  }
 
+  // Markdown / Language
+  void toggleMarkdownRendering();
   MarkdownRenderer *getMarkdownRenderer() { return markdownRenderer_.get(); }
-
-  bool isMarkdownRenderingEnabled() const
-  {
-    return markdownRenderer_ ? markdownRenderer_->isEnabled() : false;
-  }
-
+  bool isMarkdownRenderingEnabled() const;
   bool setFileLang(std::string language)
   {
     filelang = language;
     return true;
   }
   std::string getFileLang() const { return filelang; }
-
   GapBuffer getBuffer() { return buffer; }
 
   // Movement
@@ -113,7 +99,6 @@ public:
   void moveCursorToLineEnd();
   void scrollUp(int lines = 3);
   void scrollDown(int lines = 3);
-  void validateCursorAndViewport();
   void positionCursor();
 
   // Text editing
@@ -129,21 +114,19 @@ public:
   void updateSelectionEnd();
   void deleteSelection();
   std::string getSelectedText();
+  void selectAll();
 
   // Clipboard operations
   void copySelection();
   void cutSelection();
   void pasteFromClipboard();
-  void selectAll();
 
-  // Undo/Redo
-
-  void saveState();
+  // Undo/Redo (Delegated to HistoryManager)
   void undo();
   void redo();
 
   // Utility
-  bool hasUnsavedChanges() const { return isModified; }
+  bool hasUnsavedChanges() const { return history_.hasUnsavedChanges(); }
   void reloadConfig();
   void initializeViewportHighlighting();
   void updateSyntaxHighlighting();
@@ -168,7 +151,12 @@ public:
   int getCursorCol() const { return cursorCol; }
 
   bool mouseToFilePos(int mouseRow, int mouseCol, int &fileRow, int &fileCol);
-  void updateCursorAndViewport(int newLine, int newCol);
+
+  // Helpers being prepared for future FileManager class
+  bool isImageFile(const std::string &path) const;
+  std::string find_magika_models();
+  static std::string find_magika_models_static();
+  void displayBinaryWarning();
 
   // Editor cursor
   void setCursorMode();
@@ -177,63 +165,38 @@ public:
   // Validation
   EditorSnapshot captureSnapshot() const;
   ValidationResult validateState(const std::string &context) const;
-  std::string compareSnapshots(const EditorSnapshot &before,
-                               const EditorSnapshot &after) const;
-
-  // Delta undo configuration
-  void beginDeltaGroup();
-  void setDeltaUndoEnabled(bool enabled) { useDeltaUndo_ = enabled; }
-  bool isDeltaUndoEnabled() const { return useDeltaUndo_; }
 
   // Debug/stats
-  size_t getUndoMemoryUsage() const;
-  size_t getRedoMemoryUsage() const;
+  size_t getUndoMemoryUsage() const { return history_.getUndoMemoryUsage(); }
+  size_t getRedoMemoryUsage() const { return history_.getRedoMemoryUsage(); }
 
   // Indentation
   void insertTextAtCursor(const std::string &text);
   int removePreviousIndent(int amount);
-
   void forceSyntaxResync();
 
-  bool isSyntaxHihglightingReady() const
-  {
-    return syntaxHighlighter ? syntaxHighlighter->isReady() : false;
-  }
-  bool getIsBinary() const { return isBinaryFile; }
-  void displayBinaryWarning();
-  void displayImageViewer();
-  void displayImageViewerUnicode();
-  void displayImageViewerRawMode();
-  void displayImageError(const std::string &message);
-  bool isImageFile(const std::string &path) const;
-  std::string find_magika_models();
+  // Expose Utilities
+  bool isBinary() const { return isBinaryFile; }
+  void updateCursorAndViewport(int newLine, int newCol);
 
 private:
   // Core data
   GapBuffer buffer;
+
   std::string filename;
   SyntaxHighlighter *syntaxHighlighter;
+  std::unique_ptr<EditorRenderer> renderer_;
   std::unique_ptr<IndentManager> indentManager_;
-  bool isSaving = false;
   std::unique_ptr<SyntaxConfigLoader> config_loader_;
+  std::unique_ptr<FileManager> fileManager_;
 
-  // Delta
-  bool useDeltaUndo_ = false; // Feature flag - start disabled!
-  std::stack<DeltaGroup> deltaUndoStack_;
-  std::stack<DeltaGroup> deltaRedoStack_;
-  DeltaGroup currentDeltaGroup_; // Accumulates deltas for grouping
+  HistoryManager history_;
 
-  // Delta operations
-  void addDelta(const EditDelta &delta);
-  void commitDeltaGroup();
-  void applyDeltaForward(const EditDelta &delta);
-  void applyDeltaReverse(const EditDelta &delta);
-  // Helper to create delta from current operation
-  EditDelta createDeltaForInsertChar(char ch);
-  EditDelta createDeltaForDeleteChar();
-  EditDelta createDeltaForBackspace();
-  EditDelta createDeltaForNewline();
-  EditDelta createDeltaForDeleteSelection();
+  // Helper to bridge data to renderer
+  RenderContext buildRenderContext() const;
+
+  bool isSaving = false;
+
   // Viewport and cursor
   int viewportTop = 0;
   int viewportLeft = 0;
@@ -242,54 +205,52 @@ private:
   int cursorCol = 0;
 
   std::string filelang = "text";
-
   bool isPasting_ = false;
-  // Clipboard
   std::string clipboard;
 
-  // Undo/Redo
-  std::chrono::steady_clock::time_point lastEditTime;
+  // Undo/Redo Timeout Logic (Controller logic)
   static constexpr int UNDO_GROUP_TIMEOUT_MS = 2000;
-  bool isUndoRedoing = false; // Add this flag
-  std::stack<EditorState> undoStack;
-  std::stack<EditorState> redoStack;
-  static const size_t MAX_UNDO_LEVELS = 100;
 
-  // File state
-  bool isModified = false;
   int tabSize = 4;
 
   // Private helpers
   std::string expandTabs(const std::string &line, int tabSize = 4);
   std::string getFileExtension();
   bool isPositionSelected(int line, int col);
-  void markModified();
+
   void splitLineAtCursor();
   void joinLineWithNext();
-  EditorState getCurrentState();
-  void restoreState(const EditorState &state);
-  void limitUndoStack();
-  std::pair<std::pair<int, int>, std::pair<int, int>> getNormalizedSelection();
 
-  void notifyTreeSitterEdit(const EditDelta &delta, bool isReverse);
+  // NOTE: These helpers create delta objects based on CURRENT Editor state.
+  // They are passed to HistoryManager.
+  EditDelta createDeltaForInsertChar(char ch);
+  EditDelta createDeltaForDeleteChar();
+  EditDelta createDeltaForBackspace();
+  EditDelta createDeltaForNewline();
+  EditDelta createDeltaForDeleteSelection();
+
+  std::pair<std::pair<int, int>, std::pair<int, int>> getNormalizedSelection();
   void optimizedLineInvalidation(int startLine, int endLine);
 
   // Cursor Style
   CursorMode currentMode = NORMAL;
 
+  // Indent helpers
   void autoIndentCurrentLine();
   void adjustIndentForClosingBracket();
-  void adjustIndentForPythonDedent();
   bool isLineOnlyWhitespace(const std::string &line);
   std::string getIndentString(int spaces);
   int countIndentSpaces(const std::string &line);
   void pasteWithSmartIndent(const std::string &text);
-  bool shouldTriggerDedent(char ch);
 
   bool isBinaryFile = false;
 
   std::unique_ptr<MarkdownRenderer> markdownRenderer_;
   void updateMarkdownRendering();
+
+  // Internal helper
+  void validateCursorAndViewport();
+  // void updateCursorAndViewport(int newLine, int newCol);
 };
 
 #endif // EDITOR_H

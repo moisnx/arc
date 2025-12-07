@@ -492,11 +492,14 @@ set(SOURCES
     src/core/editor.cpp
     src/core/buffer.cpp
     src/core/config_manager.cpp
+    src/core/history_manager.cpp
+    src/core/file_manager.cpp
     # src/core/file_browser.cpp
     src/core/signals/signal_handler.cpp
     src/ui/input_handler.cpp
     src/ui/style_manager.cpp
     src/ui/icon_provider.cpp
+    src/ui/editor_renderer.cpp
     # src/ui/browser_renderer.cpp
     src/features/syntax_config_loader.cpp
     src/features/syntax_highlighter.cpp

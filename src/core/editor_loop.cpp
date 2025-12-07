@@ -29,7 +29,7 @@ EditorLoop::ExitReason EditorLoop::run(Editor &editor,
     }
 
     static bool was_highlighting_ready = false;
-    bool is_highlighting_ready = editor.isSyntaxHihglightingReady();
+    bool is_highlighting_ready = editor.getSyntaxHighlighter()->isReady();
 
     if (!was_highlighting_ready && is_highlighting_ready)
     {
